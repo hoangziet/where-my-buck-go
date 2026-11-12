@@ -53,6 +53,7 @@ export default function TransactionsPage() {
   const [viewingEvidenceFor, setViewingEvidenceFor] = useState<TransactionDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [undoing, setUndoing] = useState(false);
 
   useEffect(() => {
     api
@@ -128,8 +129,9 @@ export default function TransactionsPage() {
   }
 
   async function handleUndo() {
-    if (!lastDeleted) return;
+    if (!lastDeleted || undoing) return;
     setError(null);
+    setUndoing(true);
     try {
       const { tx, deletedVersion } = lastDeleted;
       const proposal = await api.proposeChange(
@@ -144,6 +146,8 @@ export default function TransactionsPage() {
     } catch (err) {
       if (await handleStaleVersion(err)) { setLastDeleted(null); return; }
       setError(err instanceof Error ? err.message : "Failed to undo delete");
+    } finally {
+      setUndoing(false);
     }
   }
 
@@ -414,9 +418,10 @@ export default function TransactionsPage() {
           <button
             type="button"
             onClick={handleUndo}
-            className="font-semibold bg-white text-ink rounded-lg px-3.5 min-h-9 cursor-pointer transition-colors duration-150 hover:bg-[#EDEBE4]"
+            disabled={undoing}
+            className="font-semibold bg-white text-ink rounded-lg px-3.5 min-h-9 cursor-pointer transition-colors duration-150 hover:bg-[#EDEBE4] disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Undo
+            {undoing ? "…" : "Undo"}
           </button>
         </div>
       )}
