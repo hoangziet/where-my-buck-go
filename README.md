@@ -1,11 +1,13 @@
 # Where My Buck Go
 
-Local-first personal finance assistant with authentication, a preview/confirm ledger and text chat.
-The web chat can create drafts and confirm them only through a separate user action. Transaction
-history supports separate edit/delete/undo previews and confirmation. The web can inspect a PNG/JPEG
-payment image through Gemini in read-only mode; image evidence and image-to-draft are not available yet.
-Gemini also has separate local smoke tests.
-`SRD.md` records the agreed product rules; no old SQLite code or data is imported.
+Local-first personal finance assistant with authentication, a preview/confirm ledger, and a Gemini-backed
+chat for text and receipt photos. Every create/edit/delete/undo is a draft until a separate, explicit
+confirm action; nothing the model proposes is written or executed directly. Attaching a receipt image
+creates a real draft with the original photo stored as evidence, same as a text message creates a draft
+with the original text as evidence — both are viewable later from the Transactions page. Chat history is
+persisted server-side (listed in the sidebar, resumable), and Q&A answers can be pinned to the dashboard.
+Gemini also has separate local smoke tests. `SRD.md` records the agreed product rules; no old SQLite
+code or data is imported.
 
 ## Run with Docker Compose
 
@@ -42,13 +44,15 @@ The Gemini adapter can be verified independently without writing financial data.
 in `.env`, load `.env` into the shell, then run `./.venv/bin/wmbg-gemini-smoke` from the repository root.
 The default model is `gemini-3.1-flash-lite` (override with `GEMINI_MODEL`). The command makes one
 request with harmless sample text and validates the forced function call.
-With `GEMINI_API_KEY` set, Gemini routes web text chat to owner-scoped read-only totals or creates
-draft proposals. It cannot confirm transactions or execute SQL. Chat history is client-supplied and
-bounded to eight turns; it is not yet persisted server-side.
+With `GEMINI_API_KEY` set, Gemini routes web text chat to owner-scoped read-only totals, draft income/expense
+proposals, or an edit/delete/undo request matched against the owner's own transactions (an explicit
+selection step if more than one matches). It cannot confirm transactions or execute SQL. Chat history is
+bounded to eight turns for the model but persisted in full server-side per conversation.
 To test a single image locally without saving it, run
 `./.venv/bin/wmbg-gemini-image-smoke image.png --expect-amount 17500 --expect-date 2026-11-09 --expect-time 18:36`.
-Only PNG/JPEG files up to 4 MB are sent to Gemini. The CLI and web image-preview endpoint are read-only
-extraction checks, not receipt storage or transaction proposals; the image is shared with the Gemini API.
+Only PNG/JPEG files up to 4 MB are sent to Gemini. The CLI is a read-only extraction check and never writes
+anything; the web `/api/chat/image-intake` endpoint performs the same extraction but creates a real,
+confirmable draft with the original image stored as evidence.
 
 ## Ledger API (local)
 
@@ -66,13 +70,23 @@ page reload. Every proposal requires original `evidenceText`. Missing date stays
 draft; a missing time receives a marked default. Local evidence lives in private `.local-evidence/`.
 The app refuses to start with filesystem evidence in production until the R2 adapter is available.
 
-`POST /api/chat/messages` accepts `{ "text": "...", "history": [], "expectedVersion": 0 }`
-with the same session, CSRF, and UUID idempotency header. Read-only totals support a single day,
-this/last month, or a validated custom range up to 366 days. It returns either a read-only answer,
-an explicit selection request for edits/deletes, or separate draft previews for extracted items.
-Retry a failed request with its original key; successful replays return the same previews.
-`POST /api/chat/image-preview` accepts multipart `image` with CSRF and returns a validated read-only
-payment preview. It neither stores the image nor creates a transaction.
+`POST /api/chat/messages` accepts `{ "text": "...", "history": [], "expectedVersion": 0, "chatId": "..." }`
+(`chatId` optional; a new conversation is created and returned when omitted) with the same session,
+CSRF, and UUID idempotency header. Read-only totals support a single day, this/last month, or a
+validated custom range up to 366 days. It returns a read-only answer, draft previews for extracted
+items, a ready-to-confirm edit/delete/undo draft when exactly one transaction matches, or a list of
+candidate transactions to pick from when more than one matches. Every response includes `debugTrace`
+(the routing steps and executed SQL templates, values hidden) for the "Steps & SQL" panel in the chat
+UI, and `chatId` for the conversation it was appended to. Retry a failed request with its original
+key; successful replays return the same previews. `POST /api/chat/image-intake` accepts multipart
+`image` (optional `caption` text) with CSRF and an idempotency key, and creates a real draft the same
+way text intake does, with the original image stored as evidence.
+`GET /api/chats` lists the owner's conversations; `GET /api/chats/<id>/messages` returns one
+conversation's full history. `POST /api/chat/pins` / `GET /api/chat/pins` / `DELETE
+/api/chat/pins/<id>` manage dashboard-pinned Q&A ranges, each re-running the same owner-scoped
+aggregate on every read — never arbitrary SQL.
+`POST /api/auth/change-password` verifies the current password before setting a new one and revokes
+every active session, the same as the CLI reset.
 
 ## Checks
 
