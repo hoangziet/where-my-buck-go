@@ -6,7 +6,7 @@ import { Search, Download, Plus, Trash2, Pencil, Eye, ChevronDown } from "lucide
 import { formatVND } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { Category, TransactionDto } from "@/lib/api";
-import { CATEGORY_LABELS } from "@/lib/api";
+import { ApiError, CATEGORY_LABELS } from "@/lib/api";
 
 type TypeFilter = "all" | "expense" | "income";
 type CategoryFilter = "all" | Category;
@@ -71,6 +71,18 @@ export default function TransactionsPage() {
     });
   }, [items, typeFilter, categoryFilter, query]);
 
+  async function handleStaleVersion(err: unknown): Promise<boolean> {
+    if (!(err instanceof ApiError) || err.status !== 409) return false;
+    try {
+      const res = await api.listTransactions();
+      setItems(res.items);
+    } catch {
+      /* best-effort refresh; the error message below still guides the user */
+    }
+    setError("This transaction changed elsewhere. The list has been refreshed — please try again.");
+    return true;
+  }
+
   async function handleDelete(t: TransactionDto) {
     setError(null);
     try {
@@ -80,6 +92,7 @@ export default function TransactionsPage() {
       setLastDeleted({ tx: t, deletedVersion: transaction.version });
       setRevealedId(null);
     } catch (err) {
+      if (await handleStaleVersion(err)) return;
       setError(err instanceof Error ? err.message : "Failed to delete transaction");
     }
   }
@@ -100,6 +113,7 @@ export default function TransactionsPage() {
       setItems((prev) => prev.map((item) => (item.id === transaction.id ? transaction : item)));
       setEditing(null);
     } catch (err) {
+      if (await handleStaleVersion(err)) { setEditing(null); return; }
       setError(err instanceof Error ? err.message : "Failed to save changes");
     }
   }
@@ -119,6 +133,7 @@ export default function TransactionsPage() {
       setItems((prev) => [...prev, transaction].sort((a, b) => (a.occurredDate < b.occurredDate ? 1 : -1)));
       setLastDeleted(null);
     } catch (err) {
+      if (await handleStaleVersion(err)) { setLastDeleted(null); return; }
       setError(err instanceof Error ? err.message : "Failed to undo delete");
     }
   }
