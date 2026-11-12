@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, Download, Plus, Trash2, Pencil, Eye, ChevronDown } from "lucide-react";
-import { formatVND } from "@/lib/format";
+import { appLocalISODate, formatVND } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { Category, TransactionDto } from "@/lib/api";
 import { ApiError, CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
@@ -36,7 +36,7 @@ function downloadCsv(items: TransactionDto[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `transactions-${appLocalISODate(new Date())}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -153,10 +153,8 @@ export default function TransactionsPage() {
 
   const groups = useMemo(() => {
     const now = new Date();
-    const today = now.toISOString().slice(0, 10);
-    const yesterdayDate = new Date(now);
-    yesterdayDate.setDate(now.getDate() - 1);
-    const yesterday = yesterdayDate.toISOString().slice(0, 10);
+    const today = appLocalISODate(now);
+    const yesterday = appLocalISODate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
     const map = new Map<string, TransactionDto[]>();
     for (const t of visible) {
       const g = dayGroup(t, today, yesterday);

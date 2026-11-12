@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus, Bookmark, X } from "lucide-react";
-import { formatVND, formatNumber } from "@/lib/format";
+import { formatVND, formatNumber, appLocalMonth, appLocalMonthYear } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { Category, PinDto, ReportsSummary, TransactionDto } from "@/lib/api";
 import { CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
@@ -82,7 +82,7 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-1">
             <span className="text-sm text-muted">Good to see you, {username}</span>
             <h1 className="m-0 font-display font-semibold text-[32px] tracking-tight">
-              {new Date().toLocaleString("en-US", { month: "long", year: "numeric" })}
+              {appLocalMonthYear(new Date())}
             </h1>
           </div>
           <Link
@@ -226,7 +226,7 @@ export default function DashboardPage() {
           <div className="flex flex-col">
             <span className="text-[13px] text-muted">Good to see you, {username}</span>
             <h1 className="m-0 font-display font-semibold text-2xl tracking-tight">
-              {new Date().toLocaleString("en-US", { month: "long" })}
+              {appLocalMonth(new Date())}
             </h1>
           </div>
           <Link
