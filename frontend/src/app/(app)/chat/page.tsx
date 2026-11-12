@@ -158,11 +158,16 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   }
 
   async function handlePin(index: number, title: string, start: string, end: string) {
+    if (pinnedIds.has(index)) return;
+    setPinnedIds((prev) => new Set(prev).add(index));
     try {
       await api.createPin(title.slice(0, 80), start, end);
-      setPinnedIds((prev) => new Set(prev).add(index));
     } catch {
-      /* non-critical convenience action; leave unpinned on failure */
+      setPinnedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
     }
   }
 
