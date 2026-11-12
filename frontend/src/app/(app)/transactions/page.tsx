@@ -273,7 +273,7 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {error && <p className="m-0 text-sm text-danger">{error}</p>}
+      {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
 
       {!loading && items.length === TRANSACTIONS_PAGE_LIMIT && (
         <p className="m-0 text-sm text-muted">
@@ -490,7 +490,7 @@ function EvidenceModal({ transaction, onClose }: { transaction: TransactionDto; 
         <p className="m-0 text-xs text-muted">
           What was originally submitted for &ldquo;{transaction.description}&rdquo;, read-only.
         </p>
-        {error && <p className="m-0 text-sm text-danger">{error}</p>}
+        {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
         {!error && items === null && <p className="m-0 text-sm text-muted">Loading…</p>}
         {items?.length === 0 && <p className="m-0 text-sm text-muted">No evidence on file.</p>}
         {items?.map(({ id, evidence }) =>

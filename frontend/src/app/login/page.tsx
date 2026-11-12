@@ -80,7 +80,7 @@ function LoginForm() {
           {!error && expired && (
             <p className="m-0 text-sm text-ink-3">Your session expired. Please sign in again.</p>
           )}
-          {error && <p className="m-0 text-sm text-danger">{error}</p>}
+          {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
           <button
             type="submit"
             disabled={submitting}

@@ -309,7 +309,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
                     )}
                   </>
                 )}
-                {m.kind === "error" && <p className="m-0 text-danger">{m.text}</p>}
+                {m.kind === "error" && <p role="alert" className="m-0 text-danger">{m.text}</p>}
                 {m.kind === "stored" && <p className="m-0">{m.text}</p>}
                 {m.kind === "needs_selection" && (
                   <>
@@ -347,7 +347,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
                       />
                     ))}
                     {m.errors.map((e) => (
-                      <p key={e.index} className="m-0 text-sm text-danger">
+                      <p key={e.index} role="alert" className="m-0 text-sm text-danger">
                         Item {e.index + 1}: {e.error}
                       </p>
                     ))}
@@ -608,7 +608,7 @@ function ProposalCard({
         {state === "discarded" && <p className="m-0 text-sm text-muted">Discarded</p>}
         {state === "error" && (
           <div className="flex flex-wrap items-center gap-2">
-            <p className="m-0 text-sm text-danger">Could not confirm.</p>
+            <p role="alert" className="m-0 text-sm text-danger">Could not confirm.</p>
             <button
               type="button"
               onClick={onConfirm}

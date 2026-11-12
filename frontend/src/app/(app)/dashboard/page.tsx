@@ -74,7 +74,7 @@ export default function DashboardPage() {
 
   return (
     <main className="flex-1 flex flex-col gap-6 px-4 pb-28 pt-6 lg:px-10 lg:pt-8 lg:pb-12">
-      {error && <p className="m-0 text-sm text-danger">{error}</p>}
+      {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
 
       {/* ---------- Desktop ---------- */}
       <div className="hidden lg:flex lg:flex-col gap-6">

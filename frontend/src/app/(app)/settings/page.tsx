@@ -91,7 +91,7 @@ export default function SettingsPage() {
             className="text-sm border border-border-input rounded-[10px] px-3.5 min-h-11 bg-transparent outline-none transition-colors duration-150 focus:border-accent"
           />
         </div>
-        {error && <p className="m-0 text-sm text-danger">{error}</p>}
+        {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
         <button
           type="submit"
           disabled={submitting}
