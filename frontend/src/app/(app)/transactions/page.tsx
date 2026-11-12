@@ -6,7 +6,7 @@ import { Search, Download, Plus, Trash2, Pencil, Eye, ChevronDown } from "lucide
 import { formatVND } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { Category, TransactionDto } from "@/lib/api";
-import { ApiError, CATEGORY_LABELS } from "@/lib/api";
+import { ApiError, CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
 
 type TypeFilter = "all" | "expense" | "income";
 type CategoryFilter = "all" | Category;
@@ -276,6 +276,13 @@ export default function TransactionsPage() {
       </div>
 
       {error && <p className="m-0 text-sm text-danger">{error}</p>}
+
+      {!loading && items.length === TRANSACTIONS_PAGE_LIMIT && (
+        <p className="m-0 text-sm text-muted">
+          Showing only the most recent {TRANSACTIONS_PAGE_LIMIT} transactions — filters, totals and CSV export
+          only cover these.
+        </p>
+      )}
 
       {!loading && visible.length === 0 && (
         <p className="m-0 text-sm text-muted">No transactions yet. Add one from the AI Chat.</p>

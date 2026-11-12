@@ -110,6 +110,10 @@ export interface TransactionDto {
   timeSource: string;
 }
 
+// Matches the backend's list_transactions() cap (ledger_repo.py); not returned by the API itself,
+// so this must stay in sync with the server-side LIMIT.
+export const TRANSACTIONS_PAGE_LIMIT = 200;
+
 export function listTransactions(): Promise<{ items: TransactionDto[] }> {
   return request("/api/transactions");
 }

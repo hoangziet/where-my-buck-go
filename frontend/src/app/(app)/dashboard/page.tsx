@@ -6,7 +6,7 @@ import { Plus, Bookmark, X } from "lucide-react";
 import { formatVND, formatNumber } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { Category, PinDto, ReportsSummary, TransactionDto } from "@/lib/api";
-import { CATEGORY_LABELS } from "@/lib/api";
+import { CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 const CATEGORY_COLORS: Record<Category, string> = {
@@ -97,7 +97,7 @@ export default function DashboardPage() {
         <AskBar />
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-          <KpiCard label="Balance" value={loading ? "…" : formatVND(balance)} sub="Last 200 transactions" />
+          <KpiCard label="Balance" value={loading ? "…" : formatVND(balance)} sub={`Last ${TRANSACTIONS_PAGE_LIMIT} transactions`} />
           <KpiCard
             label="Income"
             value={loading ? "…" : formatVND(income)}
