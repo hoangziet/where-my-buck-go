@@ -53,6 +53,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   const [sending, setSending] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmState>({});
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set());
+  const [selectingIds, setSelectingIds] = useState<Set<string>>(new Set());
   const [pendingImage, setPendingImage] = useState<File | null>(null);
   const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -226,6 +227,8 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   }
 
   async function handleSelectCandidate(candidate: TransactionDto, operation: "edit" | "delete" | "undo") {
+    if (selectingIds.has(candidate.id)) return;
+    setSelectingIds((prev) => new Set(prev).add(candidate.id));
     try {
       const proposal = await api.proposeChange(
         operation,
@@ -240,6 +243,12 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
     } catch (err) {
       const text = err instanceof Error ? err.message : "Could not create that proposal";
       setMessages((prev) => [...prev, { role: "assistant", kind: "error", text }]);
+    } finally {
+      setSelectingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(candidate.id);
+        return next;
+      });
     }
   }
 
@@ -318,6 +327,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
                       <CandidateCard
                         key={c.id}
                         candidate={c}
+                        disabled={selectingIds.has(c.id)}
                         onSelect={() => handleSelectCandidate(c, m.operation ?? "delete")}
                       />
                     ))}
@@ -517,14 +527,17 @@ function TracePanel({ entries }: { entries: TraceEntry[] }) {
   );
 }
 
-function CandidateCard({ candidate, onSelect }: { candidate: TransactionDto; onSelect: () => void }) {
+function CandidateCard({
+  candidate, onSelect, disabled,
+}: { candidate: TransactionDto; onSelect: () => void; disabled?: boolean }) {
   const amount = formatNumber(Number(candidate.amount));
   const sign = candidate.direction === "income" ? "+" : "−";
   return (
     <button
       type="button"
       onClick={onSelect}
-      className="w-full flex items-center justify-between gap-3 bg-surface border border-border-input rounded-[14px] px-4.5 py-3.5 text-left cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC]"
+      disabled={disabled}
+      className="w-full flex items-center justify-between gap-3 bg-surface border border-border-input rounded-[14px] px-4.5 py-3.5 text-left cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC] disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <div className="flex flex-col gap-0.5">
         <span className="font-medium">{candidate.description}</span>
