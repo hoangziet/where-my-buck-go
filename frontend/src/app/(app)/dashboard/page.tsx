@@ -229,9 +229,13 @@ export default function DashboardPage() {
               {new Date().toLocaleString("en-US", { month: "long" })}
             </h1>
           </div>
-          <span className="w-10 h-10 rounded-full bg-[#E3EDE6] text-accent-strong flex items-center justify-center font-semibold text-sm">
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            className="w-10 h-10 rounded-full bg-[#E3EDE6] text-accent-strong flex items-center justify-center font-semibold text-sm no-underline"
+          >
             {(username ?? "?").slice(0, 2).toUpperCase()}
-          </span>
+          </Link>
         </div>
 
         <div className="bg-ink text-white rounded-[20px] p-5 flex flex-col gap-3.5">
