@@ -53,6 +53,13 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
             response.headers["Cache-Control"] = "no-store"
         return response
 
+    @app.after_request
+    def security_headers(response: Response) -> Response:
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "same-origin"
+        return response
+
     @app.before_request
     def authenticate() -> Response | tuple[Response, int] | None:
         if not request.path.startswith("/api/") or request.path == "/api/health":
