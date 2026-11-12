@@ -17,6 +17,7 @@ from where_my_buck_go.domain.ledger import (
     TransactionRecord,
     VersionConflict,
     confirmable,
+    discardable,
     intake_fields,
 )
 
@@ -241,6 +242,23 @@ class LedgerService:
             tx.attach_evidence(owner, proposal.id, result.id)
             return LedgerResult({"proposal": proposal_view(updated), "transaction": transaction_view(result)}, 200)
         return self.execute_with_evidence(owner, key, f"confirm:{identifier}", body, confirm_in)
+
+    def discard(self, owner: str, key: str, identifier: str, expected: int, now: datetime) -> LedgerResult:
+        body: dict[str, object] = {"expectedVersion": expected}
+
+        def discard_in(tx: LedgerSession, written: list[str]) -> LedgerResult:
+            proposal = tx.proposal(owner, identifier, lock=True)
+            if proposal is None:
+                raise NotFound
+            if proposal.version != expected:
+                raise VersionConflict("Draft changed since preview")
+            discardable(proposal)
+            updated = ProposalRecord(proposal.id, owner, proposal.version + 1, proposal.operation,
+                                     proposal.target_id, proposal.base_version, proposal.fields,
+                                     proposal.result_deleted, "discarded", None)
+            tx.revise_proposal(updated, proposal.version)
+            return LedgerResult({"proposal": proposal_view(updated)}, 200)
+        return self.execute_with_evidence(owner, key, f"discard:{identifier}", body, discard_in)
 
     def read_evidence(self, owner: str, identifier: str) -> tuple[str, bytes]:
         evidence = self.store.read_evidence(owner, identifier)

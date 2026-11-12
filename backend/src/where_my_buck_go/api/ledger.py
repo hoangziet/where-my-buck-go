@@ -108,6 +108,13 @@ def ledger_blueprint(
             raise InvalidProposal("Confirm requires only a positive expectedVersion")
         return result(service.confirm(owner(), key(), identifier, version(body), datetime.now(timezone.utc)))
 
+    @api.route("/proposals/<identifier>/discard", methods=["POST"])
+    def discard(identifier: str) -> tuple[Response, int]:
+        body = payload()
+        if set(body) != {"expectedVersion"} or version(body) < 1:
+            raise InvalidProposal("Discard requires only a positive expectedVersion")
+        return result(service.discard(owner(), key(), identifier, version(body), datetime.now(timezone.utc)))
+
     @api.route("/proposals/<identifier>", methods=["GET"])
     def proposal(identifier: str) -> Response:
         return jsonify(service.proposal_details(owner(), identifier))

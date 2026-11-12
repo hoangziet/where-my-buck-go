@@ -63,7 +63,9 @@ returns `409`; repeating an identical request returns the original response. The
 the confirm route. `POST /api/proposals` creates a draft; `PATCH /api/proposals/<id>` completes or
 replaces one; `POST /api/proposals/<id>/confirm` is a distinct, explicit action. For existing
 transactions, `POST /api/proposals/changes` with `operation: edit|delete|undo`, `targetId` and
-the transaction's `expectedVersion` creates a separate preview. `GET /api/proposals/<id>` and
+the transaction's `expectedVersion` creates a separate preview. `POST /api/proposals/<id>/discard`
+marks an open draft discarded instead of leaving it open forever; it is scoped, idempotent and
+version-checked the same as confirm. `GET /api/proposals/<id>` and
 `GET /api/transactions/<id>` include owner-scoped `evidenceIds`; fetch original text via
 `GET /api/evidence/<id>`. `GET /api/proposals` lists up to 200 open owner drafts, including after a
 page reload. Every proposal requires original `evidenceText`. Missing date stays a

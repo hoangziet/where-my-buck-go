@@ -215,8 +215,14 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
     }
   }
 
-  function handleDiscard(proposal: ProposalDto) {
+  async function handleDiscard(proposal: ProposalDto) {
+    if (confirmState[proposal.id]) return;
     setConfirmState((prev) => ({ ...prev, [proposal.id]: "discarded" }));
+    try {
+      await api.discardProposal(proposal.id, proposal.version);
+    } catch {
+      /* best-effort cleanup; the draft stays hidden locally even if the backend call failed */
+    }
   }
 
   async function handleSelectCandidate(candidate: TransactionDto, operation: "edit" | "delete" | "undo") {

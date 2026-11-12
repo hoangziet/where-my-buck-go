@@ -93,3 +93,8 @@ def confirmable(proposal: ProposalRecord, target: TransactionRecord | None) -> N
         raise VersionConflict("Transaction changed since preview")
     if proposal.operation in ("edit", "delete") and target.deleted:
         raise VersionConflict("Cannot edit or delete an already deleted transaction")
+
+
+def discardable(proposal: ProposalRecord) -> None:
+    if proposal.state != "draft":
+        raise VersionConflict("Proposal is no longer open")

@@ -179,6 +179,10 @@ export function confirmProposal(
   return request(`/api/proposals/${id}/confirm`, { method: "POST", body: { expectedVersion } });
 }
 
+export function discardProposal(id: string, expectedVersion: number): Promise<{ proposal: ProposalDto }> {
+  return request(`/api/proposals/${id}/discard`, { method: "POST", body: { expectedVersion } });
+}
+
 export interface ReportsSummary {
   start: string;
   end: string;

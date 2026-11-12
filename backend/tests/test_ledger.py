@@ -131,6 +131,27 @@ def test_preview_confirm_evidence_and_replay(ledger_client: tuple[FlaskClient, s
     assert client.get(f'/api/transactions/{transaction["id"]}').json["evidenceIds"] == [evidence_id]
 
 
+def test_discard_hides_draft_and_is_scoped_and_replayable(
+    ledger_client: tuple[FlaskClient, str, FlaskClient, str],
+) -> None:
+    client, csrf, other, other_csrf = ledger_client
+    proposed = client.post("/api/proposals", json=new_expense(), headers=headers(csrf))
+    assert proposed.status_code == 201
+    proposal_id = proposed.json["id"]
+    endpoint = f"/api/proposals/{proposal_id}/discard"
+    assert other.post(endpoint, json={"expectedVersion": 1}, headers=headers(other_csrf)).status_code == 404
+    discard_key = str(uuid4())
+    discarded = client.post(endpoint, json={"expectedVersion": 1}, headers=headers(csrf, discard_key))
+    assert discarded.status_code == 200
+    assert discarded.json["proposal"]["state"] == "discarded"
+    assert discarded.json["proposal"]["canConfirm"] is False
+    assert client.get("/api/proposals").json == {"items": []}
+    assert client.post(endpoint, json={"expectedVersion": 1}, headers=headers(csrf, discard_key)).json == discarded.json
+    assert client.post(endpoint, json={"expectedVersion": 1}, headers=headers(csrf)).status_code == 409
+    assert client.post(f"/api/proposals/{proposal_id}/confirm", json={"expectedVersion": 2},
+                       headers=headers(csrf)).status_code == 409
+
+
 def test_missing_date_amend_before_confirm(ledger_client: tuple[FlaskClient, str, FlaskClient, str]) -> None:
     client, csrf, _, _ = ledger_client
     proposed = client.post("/api/proposals", json={**new_expense(date=None), "occurredTime": None},
