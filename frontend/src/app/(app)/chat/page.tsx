@@ -28,7 +28,7 @@ type AssistantMessage = (
 
 type Message = { role: "user"; text: string; imagePreviewUrl?: string } | AssistantMessage;
 
-type ConfirmState = Record<string, { transactionId: string } | "discarded" | "error">;
+type ConfirmState = Record<string, { transactionId: string } | "discarded" | "error" | "pending">;
 
 export default function ChatPage() {
   return (
@@ -199,6 +199,9 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   }
 
   async function handleConfirm(proposal: ProposalDto) {
+    const existing = confirmState[proposal.id];
+    if (existing && existing !== "error") return;
+    setConfirmState((prev) => ({ ...prev, [proposal.id]: "pending" }));
     try {
       const { transaction } = await api.confirmProposal(proposal.id, proposal.version);
       setConfirmState((prev) => ({ ...prev, [proposal.id]: { transactionId: transaction.id } }));
@@ -590,8 +593,20 @@ function ProposalCard({
         {!state && !proposal.canConfirm && (
           <p className="m-0 text-sm text-muted">Missing date — ask a follow-up to add it before confirming.</p>
         )}
+        {state === "pending" && <p className="m-0 text-sm text-muted">Confirming…</p>}
         {state === "discarded" && <p className="m-0 text-sm text-muted">Discarded</p>}
-        {state === "error" && <p className="m-0 text-sm text-danger">Could not confirm — try again.</p>}
+        {state === "error" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="m-0 text-sm text-danger">Could not confirm.</p>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="font-semibold text-sm bg-accent text-white border-0 rounded-[10px] px-4 min-h-11 cursor-pointer transition-colors duration-150 hover:bg-accent-strong"
+            >
+              Try again
+            </button>
+          </div>
+        )}
         {state && typeof state === "object" && (
           <div className="flex items-center gap-2.5 text-sm text-accent-strong">
             <Check size={16} strokeWidth={2.4} />
