@@ -52,6 +52,7 @@ export default function TransactionsPage() {
   const [editing, setEditing] = useState<TransactionDto | null>(null);
   const [viewingEvidenceFor, setViewingEvidenceFor] = useState<TransactionDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     api
@@ -84,7 +85,9 @@ export default function TransactionsPage() {
   }
 
   async function handleDelete(t: TransactionDto) {
+    if (deletingIds.has(t.id)) return;
     setError(null);
+    setDeletingIds((prev) => new Set(prev).add(t.id));
     try {
       const proposal = await api.proposeChange("delete", t.id, t.version, `Deleted "${t.description}" from Transactions page`);
       const { transaction } = await api.confirmProposal(proposal.id, proposal.version);
@@ -94,6 +97,12 @@ export default function TransactionsPage() {
     } catch (err) {
       if (await handleStaleVersion(err)) return;
       setError(err instanceof Error ? err.message : "Failed to delete transaction");
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(t.id);
+        return next;
+      });
     }
   }
 
@@ -324,7 +333,8 @@ export default function TransactionsPage() {
                     type="button"
                     aria-label="Delete transaction"
                     onClick={() => handleDelete(t)}
-                    className="w-9 h-9 rounded-lg text-ink-3 cursor-pointer transition-colors duration-150 hover:bg-[#FBEAE8] hover:text-danger"
+                    disabled={deletingIds.has(t.id)}
+                    className="w-9 h-9 rounded-lg text-ink-3 cursor-pointer transition-colors duration-150 hover:bg-[#FBEAE8] hover:text-danger disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Trash2 size={16} className="mx-auto" />
                   </button>
@@ -380,9 +390,10 @@ export default function TransactionsPage() {
                         <button
                           type="button"
                           onClick={() => handleDelete(t)}
-                          className="text-xs font-semibold w-[72px] border-0 bg-danger text-white cursor-pointer transition-colors duration-150 active:bg-[#8F1B13]"
+                          disabled={deletingIds.has(t.id)}
+                          className="text-xs font-semibold w-[72px] border-0 bg-danger text-white cursor-pointer transition-colors duration-150 active:bg-[#8F1B13] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Delete
+                          {deletingIds.has(t.id) ? "…" : "Delete"}
                         </button>
                       </>
                     )}
