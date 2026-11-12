@@ -11,6 +11,16 @@ import { ApiError, CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
 type TypeFilter = "all" | "expense" | "income";
 type CategoryFilter = "all" | Category;
 
+function useEscapeKey(onEscape: () => void) {
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      if (e.key === "Escape") onEscape();
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onEscape]);
+}
+
 function displayDate(t: TransactionDto): string {
   const [, month, day] = t.occurredDate.split("-");
   return `${day}/${month} ${t.occurredTime}`;
@@ -445,6 +455,7 @@ export default function TransactionsPage() {
 function EvidenceModal({ transaction, onClose }: { transaction: TransactionDto; onClose: () => void }) {
   const [items, setItems] = useState<{ id: string; evidence: api.EvidenceItem }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useEscapeKey(onClose);
 
   useEffect(() => {
     let cancelled = false;
@@ -530,6 +541,7 @@ function EditModal({
   const [occurredDate, setOccurredDate] = useState(transaction.occurredDate);
   const [occurredTime, setOccurredTime] = useState(transaction.occurredTime);
   const [saving, setSaving] = useState(false);
+  useEscapeKey(onCancel);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
