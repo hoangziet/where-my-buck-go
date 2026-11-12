@@ -54,6 +54,10 @@ export function me(): Promise<Me> {
   return request("/api/auth/me");
 }
 
+export function changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {
+  return request("/api/auth/change-password", { method: "POST", body: { currentPassword, newPassword } });
+}
+
 export type Category =
   | "food_drink"
   | "transport"

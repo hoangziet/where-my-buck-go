@@ -95,6 +95,25 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
         session: SessionRecord = g.session
         return jsonify(username=session.username)
 
+    @app.post("/api/auth/change-password")
+    def change_password() -> Response | tuple[Response, int]:
+        session: SessionRecord = g.session
+        data: Any = request.get_json(silent=True)
+        if not isinstance(data, dict) or not isinstance(data.get("currentPassword"), str) or not isinstance(
+            data.get("newPassword"), str
+        ) or len(data["currentPassword"]) > 1024 or len(data["newPassword"]) > 1024:
+            return jsonify(error="currentPassword and newPassword are required"), 400
+        try:
+            changed = service.change_password(session.username, data["currentPassword"], data["newPassword"])
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
+        if not changed:
+            return jsonify(error="Current password is incorrect"), 401
+        response = jsonify(ok=True)
+        response.delete_cookie(cookie_name, path="/", secure=is_production, httponly=True, samesite="Strict")
+        response.delete_cookie(csrf_cookie_name, path="/", secure=is_production, samesite="Strict")
+        return response
+
     @app.post("/api/auth/logout")
     def logout() -> Response:
         service.logout(request.cookies.get(cookie_name, ""))

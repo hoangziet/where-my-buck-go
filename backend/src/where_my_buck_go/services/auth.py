@@ -68,6 +68,19 @@ class AuthService:
             raise ValueError("Password must be at least 12 characters")
         return self.store.reset_password(username, self.hasher.hash(password), utc_now())
 
+    def change_password(self, username: str, current_password: str, new_password: str) -> bool:
+        """Self-service change: verifies the caller's own current password first."""
+        if len(new_password) < 12:
+            raise ValueError("New password must be at least 12 characters")
+        user = self.store.find_user(username)
+        if user is None:
+            return False
+        try:
+            self.hasher.verify(user.password_hash, current_password)
+        except VerifyMismatchError:
+            return False
+        return self.store.reset_password(username, self.hasher.hash(new_password), utc_now())
+
     def login(self, username: str, password: str, address: str) -> LoginResult | None:
         now = utc_now()
         address_digest = hmac.digest(self.hmac_key, address.encode("utf-8"), "sha256")

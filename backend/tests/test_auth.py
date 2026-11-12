@@ -72,6 +72,22 @@ def test_password_reset_revokes_sessions(setup: tuple[AuthService, MemoryAuthSto
     assert service.login("owner", "new-long-password-123", "192.0.2.3") is not None
 
 
+def test_change_password_verifies_current_and_revokes_sessions(
+    setup: tuple[AuthService, MemoryAuthStore],
+) -> None:
+    service, _ = setup
+    session = service.login("owner", "very-long-password-123", "192.0.2.1")
+    assert session is not None
+    assert not service.change_password("owner", "wrong-current-password", "new-long-password-123")
+    assert service.session(session.token) is not None
+    with pytest.raises(ValueError):
+        service.change_password("owner", "very-long-password-123", "short")
+    assert service.change_password("owner", "very-long-password-123", "new-long-password-123")
+    assert service.session(session.token) is None
+    assert service.login("owner", "very-long-password-123", "192.0.2.2") is None
+    assert service.login("owner", "new-long-password-123", "192.0.2.3") is not None
+
+
 def test_login_rate_limit_and_no_plain_ip(setup: tuple[AuthService, MemoryAuthStore]) -> None:
     service, store = setup
     for _ in range(10):
@@ -119,3 +135,26 @@ def test_http_cookie_csrf_permissions_and_revocation(setup: tuple[AuthService, M
     assert client.post("/api/auth/logout", headers={"X-CSRF-Token": csrf}).status_code == 200
     assert client.get("/api/auth/me").status_code == 401
     assert client.post("/api/auth/register", json={}).status_code == 401
+
+
+def test_change_password_endpoint(setup: tuple[AuthService, MemoryAuthStore]) -> None:
+    service, _ = setup
+    app = create_app(service, production=True)
+    client = app.test_client()
+    login = client.post("/api/auth/login", json={"username": "owner", "password": "very-long-password-123"})
+    csrf = login.json["csrfToken"]
+    assert client.post("/api/auth/change-password",
+                       json={"currentPassword": "very-long-password-123", "newPassword": "new-long-password-123"},
+                       ).status_code == 403
+    assert client.post("/api/auth/change-password", json={"currentPassword": "wrong", "newPassword": "x" * 20},
+                       headers={"X-CSRF-Token": csrf}).status_code == 401
+    assert client.post("/api/auth/change-password", json={"currentPassword": "very-long-password-123",
+                                                           "newPassword": "short"},
+                       headers={"X-CSRF-Token": csrf}).status_code == 400
+    response = client.post("/api/auth/change-password",
+                           json={"currentPassword": "very-long-password-123", "newPassword": "new-long-password-123"},
+                           headers={"X-CSRF-Token": csrf})
+    assert response.status_code == 200 and response.json == {"ok": True}
+    assert client.get("/api/auth/me").status_code == 401
+    relogged = client.post("/api/auth/login", json={"username": "owner", "password": "new-long-password-123"})
+    assert relogged.status_code == 200

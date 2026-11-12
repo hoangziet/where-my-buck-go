@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LayoutGrid, MessageCircle, List, LogOut } from "lucide-react";
+import { LayoutGrid, MessageCircle, List, Settings, LogOut } from "lucide-react";
 import { LogoMark } from "./Logo";
 import { useAuth } from "@/lib/auth-context";
 import * as api from "@/lib/api";
@@ -87,6 +87,14 @@ export function Sidebar() {
           <span className="font-medium text-sm truncate">{username}</span>
           <span className="text-xs text-muted">Personal</span>
         </div>
+        <Link
+          href="/settings"
+          aria-label="Settings"
+          aria-current={pathname === "/settings" ? "page" : undefined}
+          className="w-9 h-9 rounded-lg text-ink-3 no-underline flex items-center justify-center transition-colors duration-150 hover:bg-[#F4F2EC] hover:text-ink"
+        >
+          <Settings size={16} />
+        </Link>
         <button
           type="button"
           aria-label="Sign out"

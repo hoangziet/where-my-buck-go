@@ -8,6 +8,7 @@ interface AuthState {
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  invalidate: () => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -34,7 +35,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUsername(null);
   }, []);
 
-  return <AuthContext.Provider value={{ username, loading, login, logout }}>{children}</AuthContext.Provider>;
+  const invalidate = useCallback(() => setUsername(null), []);
+
+  return (
+    <AuthContext.Provider value={{ username, loading, login, logout, invalidate }}>{children}</AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthState {
