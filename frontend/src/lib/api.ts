@@ -34,12 +34,17 @@ async function request<T>(
     headers["X-CSRF-Token"] = csrfToken();
     headers["Idempotency-Key"] = crypto.randomUUID();
   }
-  const res = await fetch(path, {
-    method,
-    headers,
-    credentials: "include",
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      headers,
+      credentials: "include",
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    });
+  } catch {
+    throw new ApiError(0, "Can't reach the server — check your connection and try again.");
+  }
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
@@ -116,7 +121,12 @@ export function getTransaction(id: string): Promise<TransactionDto & { evidenceI
 export type EvidenceItem = { kind: "text"; content: string } | { kind: "image"; content: string };
 
 export async function getEvidence(id: string): Promise<EvidenceItem> {
-  const res = await fetch(`/api/evidence/${id}`, { credentials: "include" });
+  let res: Response;
+  try {
+    res = await fetch(`/api/evidence/${id}`, { credentials: "include" });
+  } catch {
+    throw new ApiError(0, "Can't reach the server — check your connection and try again.");
+  }
   if (!res.ok) throw new ApiError(res.status, "Could not load evidence");
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.startsWith("image/")) {
@@ -268,12 +278,17 @@ export async function imageIntake(file: File, caption?: string): Promise<ImageIn
   const form = new FormData();
   form.append("image", file);
   if (caption) form.append("caption", caption);
-  const res = await fetch("/api/chat/image-intake", {
-    method: "POST",
-    credentials: "include",
-    headers: { "X-CSRF-Token": csrfToken(), "Idempotency-Key": crypto.randomUUID() },
-    body: form,
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/chat/image-intake", {
+      method: "POST",
+      credentials: "include",
+      headers: { "X-CSRF-Token": csrfToken(), "Idempotency-Key": crypto.randomUUID() },
+      body: form,
+    });
+  } catch {
+    throw new ApiError(0, "Can't reach the server — check your connection and try again.");
+  }
   const data = await res.json();
   if (!res.ok) throw new ApiError(res.status, data.error || "Image intake failed", data);
   return data as ImageIntakeResponse;

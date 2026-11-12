@@ -88,9 +88,15 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
     router.push("/chat");
   }
 
+  const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
   function stageImage(file: File) {
     if (!(["image/png", "image/jpeg"].includes(file.type))) {
       setMessages((prev) => [...prev, { role: "assistant", kind: "error", text: "Only PNG and JPEG images are supported." }]);
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setMessages((prev) => [...prev, { role: "assistant", kind: "error", text: "Image is larger than 4 MB. Please use a smaller photo." }]);
       return;
     }
     if (pendingImageUrl) URL.revokeObjectURL(pendingImageUrl);

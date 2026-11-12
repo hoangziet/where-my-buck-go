@@ -97,7 +97,7 @@ export default function DashboardPage() {
         <AskBar />
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-          <KpiCard label="Balance" value={loading ? "…" : formatVND(balance)} sub="All confirmed transactions" />
+          <KpiCard label="Balance" value={loading ? "…" : formatVND(balance)} sub="Last 200 transactions" />
           <KpiCard
             label="Income"
             value={loading ? "…" : formatVND(income)}
