@@ -13,6 +13,16 @@ function csrfToken(): string {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
+// Paths where a 401 is an expected "am I logged in?" check, not a stale session.
+const AUTH_CHECK_PATHS = new Set(["/api/auth/me", "/api/auth/login"]);
+
+let onSessionExpired: (() => void) | null = null;
+
+/** Registered once by AuthProvider so any 401 from an authenticated call can log the user out. */
+export function setSessionExpiredHandler(handler: (() => void) | null): void {
+  onSessionExpired = handler;
+}
+
 async function request<T>(
   path: string,
   options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
@@ -33,6 +43,7 @@ async function request<T>(
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
+    if (res.status === 401 && !AUTH_CHECK_PATHS.has(path)) onSessionExpired?.();
     throw new ApiError(res.status, (data && data.error) || `Request failed (${res.status})`, data);
   }
   return data as T;

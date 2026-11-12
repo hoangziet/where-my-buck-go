@@ -6,6 +6,7 @@ import * as api from "@/lib/api";
 interface AuthState {
   username: string | null;
   loading: boolean;
+  sessionExpired: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   invalidate: () => void;
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   useEffect(() => {
     api
@@ -25,9 +27,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    api.setSessionExpiredHandler(() => {
+      setSessionExpired(true);
+      setUsername(null);
+    });
+    return () => api.setSessionExpiredHandler(null);
+  }, []);
+
   const login = useCallback(async (user: string, password: string) => {
     const res = await api.login(user, password);
     setUsername(res.username);
+    setSessionExpired(false);
   }, []);
 
   const logout = useCallback(async () => {
@@ -38,7 +49,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const invalidate = useCallback(() => setUsername(null), []);
 
   return (
-    <AuthContext.Provider value={{ username, loading, login, logout, invalidate }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ username, loading, sessionExpired, login, logout, invalidate }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 

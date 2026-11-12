@@ -6,12 +6,12 @@ import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/lib/auth-context";
 
 export default function AppGroupLayout({ children }: { children: React.ReactNode }) {
-  const { username, loading } = useAuth();
+  const { username, loading, sessionExpired } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !username) router.replace("/login");
-  }, [loading, username, router]);
+    if (!loading && !username) router.replace(sessionExpired ? "/login?expired=1" : "/login");
+  }, [loading, username, sessionExpired, router]);
 
   if (loading || !username) return null;
 
