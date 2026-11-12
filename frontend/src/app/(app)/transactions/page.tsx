@@ -462,6 +462,14 @@ function EvidenceModal({ transaction, onClose }: { transaction: TransactionDto; 
     };
   }, [transaction.id]);
 
+  useEffect(() => {
+    return () => {
+      for (const { evidence } of items ?? []) {
+        if (evidence.kind === "image") URL.revokeObjectURL(evidence.content);
+      }
+    };
+  }, [items]);
+
   return (
     <div className="fixed inset-0 bg-ink/40 z-30 flex items-center justify-center px-4" onClick={onClose}>
       <div
