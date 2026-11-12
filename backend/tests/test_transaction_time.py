@@ -64,6 +64,7 @@ def test_relative_dates_use_original_anchor_not_worker_time() -> None:
     ("2026-02-30", None, None), ("09/13/2026", None, None), ("tối qua", None, None),
     ("2026-11-09", "sáng", "20:00"), ("2026-11-09", "đêm", None),
     ("2026-11-09", None, "24:00"), ("2026-11-09", None, "18:30:00"),
+    ("2026-11-10", None, None), ("10/11/2026", None, None),
 ])
 def test_invalid_or_conflicting_time_asks_for_correction(
     date_text: str, period: str | None, clock: str | None,

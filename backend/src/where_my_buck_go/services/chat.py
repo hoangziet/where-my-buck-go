@@ -128,7 +128,12 @@ class ChatService:
         parsed = self.model.call_function(
             "Extract each independent income or expense from this Vietnamese message into separate items. "
             "Preserve the user's shared date and time across all items unless they explicitly differ. "
-            "Use canonical integer VND digits; date hôm nay/hôm qua or YYYY-MM-DD. "
+            "Use canonical integer VND digits. For the date field, prefer passing through the literal word "
+            "hôm nay or hôm qua exactly as written when the owner used one of those words — do not compute "
+            "an absolute date yourself for them. Only emit an explicit YYYY-MM-DD when the owner stated a "
+            "specific date or a different relative date; if you do, it must be on or before "
+            f"{now.astimezone(LOCAL_ZONE).date().isoformat()} (today, Asia/Ho_Chi_Minh), never a future or "
+            "unrelated year. "
             "A time-of-day word (sáng/trưa/chiều/tối) goes ONLY in 'period', never in 'occurredTime'. "
             "'occurredTime' is strict 24-hour HH:MM and must be left empty unless the message states an "
             "explicit clock number (e.g. '7h30 sáng' -> period 'sáng', occurredTime '07:30'; '19h' -> "

@@ -108,6 +108,8 @@ def resolve_transaction_time(
 ) -> TransactionTime:
     """Return a draft-ready time and provenance; never infer a missing date."""
     occurred_date = parse_transaction_date(date_text, received_at)
+    if occurred_date is not None and occurred_date > received_at.astimezone(LOCAL_ZONE).date():
+        raise InvalidTransactionTime("Transaction date must not be in the future")
     stated_period = parse_period(period)
     if time_text is not None and time_text != "":
         clock = parse_clock(time_text)
