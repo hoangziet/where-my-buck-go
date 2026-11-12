@@ -38,7 +38,14 @@ def detect_mime(raw: bytes) -> str:
     raise ValueError("Only actual PNG or JPEG files are accepted")
 
 
-def inspect_image(model: ChatModel, raw: bytes) -> ImagePreview:
+def inspect_image(model: ChatModel, raw: bytes, caption: str | None = None) -> ImagePreview:
     mime_type = detect_mime(raw)
-    args = model.call_function(IMAGE_PROMPT, "preview_payment_image", IMAGE_FIELDS, image=raw, mime_type=mime_type)
+    prompt = IMAGE_PROMPT
+    if caption:
+        prompt += (
+            " The owner also wrote this caption alongside the image: " + caption +
+            ". Use it only to clarify the merchant or category; always trust the receipt's own "
+            "amount, date and time over the caption."
+        )
+    args = model.call_function(prompt, "preview_payment_image", IMAGE_FIELDS, image=raw, mime_type=mime_type)
     return validate_image_preview(args)

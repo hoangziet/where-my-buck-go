@@ -225,14 +225,17 @@ def ledger_blueprint(
     def image_intake() -> tuple[Response, int]:
         if chat is None:
             return jsonify(error="Gemini chat is not configured"), 503
-        if set(request.files) != {"image"}:
+        if set(request.files) != {"image"} or not set(request.form) <= {"caption"}:
             raise InvalidProposal("One PNG or JPEG image is required")
+        caption = request.form.get("caption", "").strip()
+        if len(caption) > 500:
+            raise InvalidProposal("Caption must be at most 500 characters")
         idempotency_key = key()
         raw = request.files["image"].read(4_000_001)
         with capture_debug_trace() as trace:
             try:
                 mime = detect_mime(raw)
-                preview = inspect_image(chat.model, raw)
+                preview = inspect_image(chat.model, raw, caption or None)
             except GeminiError as error:
                 status = 429 if "HTTP 429" in str(error) else 503
                 return jsonify(error=str(error), debugTrace=trace.snapshot()), status

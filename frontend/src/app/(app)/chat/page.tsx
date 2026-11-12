@@ -26,7 +26,7 @@ type AssistantMessage = (
   | { role: "assistant"; kind: "stored"; text: string }
 ) & { debugTrace?: TraceEntry[] };
 
-type Message = { role: "user"; text: string } | AssistantMessage;
+type Message = { role: "user"; text: string; imagePreviewUrl?: string } | AssistantMessage;
 
 type ConfirmState = Record<string, { transactionId: string } | "discarded" | "error">;
 
@@ -53,6 +53,8 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   const [sending, setSending] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmState>({});
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set());
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const ownedChatId = useRef<string | undefined | null>(null);
 
@@ -86,9 +88,29 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
     router.push("/chat");
   }
 
+  function stageImage(file: File) {
+    if (!(["image/png", "image/jpeg"].includes(file.type))) {
+      setMessages((prev) => [...prev, { role: "assistant", kind: "error", text: "Only PNG and JPEG images are supported." }]);
+      return;
+    }
+    if (pendingImageUrl) URL.revokeObjectURL(pendingImageUrl);
+    setPendingImage(file);
+    setPendingImageUrl(URL.createObjectURL(file));
+  }
+
+  function removePendingImage() {
+    if (pendingImageUrl) URL.revokeObjectURL(pendingImageUrl);
+    setPendingImage(null);
+    setPendingImageUrl(null);
+  }
+
   async function handleSend() {
     const text = input.trim();
-    if (!text || sending) return;
+    if ((!text && !pendingImage) || sending) return;
+    if (pendingImage) {
+      await sendImage(pendingImage, text);
+      return;
+    }
     setInput("");
     setMessages((prev) => [...prev, { role: "user", text }]);
     setSending(true);
@@ -138,10 +160,15 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
     }
   }
 
-  async function handleAttach(file: File) {
+  async function sendImage(file: File, caption: string) {
+    const previewUrl = pendingImageUrl ?? URL.createObjectURL(file);
+    setInput("");
+    setPendingImage(null);
+    setPendingImageUrl(null);
+    setMessages((prev) => [...prev, { role: "user", text: caption, imagePreviewUrl: previewUrl }]);
     setSending(true);
     try {
-      const res = await api.imageIntake(file);
+      const res = await api.imageIntake(file, caption || undefined);
       setMessages((prev) => [...prev, {
         role: "assistant", kind: "image_intake", text: res.message, proposal: res.proposal,
         debugTrace: res.debugTrace,
@@ -157,17 +184,12 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   }
 
   function handlePasteImage(event: React.ClipboardEvent<HTMLTextAreaElement>) {
-    if (sending) return;
     const image = Array.from(event.clipboardData.items)
       .find((item) => item.kind === "file" && item.type.startsWith("image/"));
     const file = image?.getAsFile();
     if (!file) return;
     event.preventDefault();
-    if (!(["image/png", "image/jpeg"].includes(file.type))) {
-      setMessages((prev) => [...prev, { role: "assistant", kind: "error", text: "Only PNG and JPEG images are supported." }]);
-      return;
-    }
-    void handleAttach(new File([file], file.name || "pasted-image.png", { type: file.type }));
+    stageImage(new File([file], file.name || "pasted-image.png", { type: file.type }));
   }
 
   async function handleConfirm(proposal: ProposalDto) {
@@ -244,7 +266,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
 
           {messages.map((m, i) =>
             m.role === "user" ? (
-              <UserBubble key={i}>{m.text}</UserBubble>
+              <UserBubble key={i} imagePreviewUrl={m.imagePreviewUrl}>{m.text}</UserBubble>
             ) : (
               <AiMessage key={i}>
                 {m.kind === "qa" && (
@@ -343,13 +365,27 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
             }}
             className="bg-surface border border-border-input rounded-[20px] p-3.5 flex flex-col gap-2.5 shadow-[0_12px_32px_-20px_rgba(22,32,26,0.25)] transition-colors duration-150 has-[textarea:focus]:border-accent"
           >
+            {pendingImageUrl && (
+              <div className="relative w-fit">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={pendingImageUrl} alt="Attached receipt" className="h-20 w-20 rounded-[12px] object-cover border border-border-input" />
+                <button
+                  type="button"
+                  aria-label="Remove attached image"
+                  onClick={removePendingImage}
+                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-ink text-white border-0 flex items-center justify-center cursor-pointer text-xs leading-none"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             <label htmlFor="chat-input" className="sr-only">
               Message
             </label>
             <textarea
               id="chat-input"
               rows={2}
-              placeholder="Log a spend, attach a receipt, or ask about your money…"
+              placeholder={pendingImage ? "Add a caption (optional)…" : "Log a spend, attach a receipt, or ask about your money…"}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onPaste={handlePasteImage}
@@ -370,7 +406,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) handleAttach(file);
+                    if (file) stageImage(file);
                     e.target.value = "";
                   }}
                 />
@@ -394,7 +430,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
               <button
                 type="submit"
                 aria-label="Send"
-                disabled={sending || !input.trim()}
+                disabled={sending || (!input.trim() && !pendingImage)}
                 className="w-11 h-11 rounded-full border-0 bg-accent text-white flex items-center justify-center cursor-pointer transition-colors duration-150 hover:bg-accent-strong disabled:opacity-50"
               >
                 <ArrowUp size={20} strokeWidth={2.2} />
@@ -408,8 +444,18 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   );
 }
 
-function UserBubble({ children }: { children: React.ReactNode }) {
-  return <div className="self-end max-w-[75%] bg-ink text-white px-4 py-3 rounded-[16px_16px_4px_16px]">{children}</div>;
+function UserBubble({ children, imagePreviewUrl }: { children: React.ReactNode; imagePreviewUrl?: string }) {
+  return (
+    <div className="self-end max-w-[75%] flex flex-col items-end gap-1.5">
+      {imagePreviewUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imagePreviewUrl} alt="Attached receipt" className="max-w-[220px] max-h-[220px] rounded-[14px] object-cover" />
+      )}
+      {children && (
+        <div className="bg-ink text-white px-4 py-3 rounded-[16px_16px_4px_16px]">{children}</div>
+      )}
+    </div>
+  );
 }
 
 function AiMessage({ children }: { children: React.ReactNode }) {

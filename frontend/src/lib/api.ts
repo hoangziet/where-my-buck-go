@@ -232,9 +232,10 @@ export interface ImageIntakeResponse {
   debugTrace?: TraceEntry[];
 }
 
-export async function imageIntake(file: File): Promise<ImageIntakeResponse> {
+export async function imageIntake(file: File, caption?: string): Promise<ImageIntakeResponse> {
   const form = new FormData();
   form.append("image", file);
+  if (caption) form.append("caption", caption);
   const res = await fetch("/api/chat/image-intake", {
     method: "POST",
     credentials: "include",
