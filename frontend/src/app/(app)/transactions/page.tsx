@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Download, Plus, Trash2, Pencil, ChevronDown } from "lucide-react";
+import { Search, Download, Plus, Trash2, Pencil, Eye, ChevronDown } from "lucide-react";
 import { formatVND } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { Category, TransactionDto } from "@/lib/api";
@@ -50,6 +50,7 @@ export default function TransactionsPage() {
   const [lastDeleted, setLastDeleted] = useState<{ tx: TransactionDto; deletedVersion: number } | null>(null);
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TransactionDto | null>(null);
+  const [viewingEvidenceFor, setViewingEvidenceFor] = useState<TransactionDto | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -290,6 +291,14 @@ export default function TransactionsPage() {
                 <td className="py-2 pr-5 pl-3 border-b border-border-row whitespace-nowrap text-right">
                   <button
                     type="button"
+                    aria-label="View evidence"
+                    onClick={() => setViewingEvidenceFor(t)}
+                    className="w-9 h-9 rounded-lg text-ink-3 cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC] hover:text-ink"
+                  >
+                    <Eye size={16} className="mx-auto" />
+                  </button>
+                  <button
+                    type="button"
                     aria-label="Edit transaction"
                     onClick={() => setEditing(t)}
                     className="w-9 h-9 rounded-lg text-ink-3 cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC] hover:text-ink"
@@ -341,6 +350,13 @@ export default function TransactionsPage() {
                       <>
                         <button
                           type="button"
+                          onClick={() => setViewingEvidenceFor(t)}
+                          className="text-xs font-medium w-16 border-0 bg-border-input cursor-pointer transition-colors duration-150 active:bg-[#D8D5CC]"
+                        >
+                          View
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setEditing(t)}
                           className="text-xs font-medium w-16 border-0 bg-border-input cursor-pointer transition-colors duration-150 active:bg-[#D8D5CC]"
                         >
@@ -382,7 +398,72 @@ export default function TransactionsPage() {
       {editing && (
         <EditModal transaction={editing} onCancel={() => setEditing(null)} onSave={handleEditSave} />
       )}
+
+      {viewingEvidenceFor && (
+        <EvidenceModal transaction={viewingEvidenceFor} onClose={() => setViewingEvidenceFor(null)} />
+      )}
     </main>
+  );
+}
+
+function EvidenceModal({ transaction, onClose }: { transaction: TransactionDto; onClose: () => void }) {
+  const [items, setItems] = useState<{ id: string; evidence: api.EvidenceItem }[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getTransaction(transaction.id)
+      .then((detail) => Promise.all(detail.evidenceIds.map(async (id) => ({ id, evidence: await api.getEvidence(id) }))))
+      .then((loaded) => {
+        if (!cancelled) setItems(loaded);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load evidence");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [transaction.id]);
+
+  return (
+    <div className="fixed inset-0 bg-ink/40 z-30 flex items-center justify-center px-4" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-3.5 w-full max-w-[480px] max-h-[80vh] overflow-y-auto"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="m-0 text-base font-semibold">Original evidence</h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg text-ink-3 border-0 bg-transparent cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC] hover:text-ink"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="m-0 text-xs text-muted">
+          What was originally submitted for &ldquo;{transaction.description}&rdquo;, read-only.
+        </p>
+        {error && <p className="m-0 text-sm text-danger">{error}</p>}
+        {!error && items === null && <p className="m-0 text-sm text-muted">Loading…</p>}
+        {items?.length === 0 && <p className="m-0 text-sm text-muted">No evidence on file.</p>}
+        {items?.map(({ id, evidence }) =>
+          evidence.kind === "image" ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={id} src={evidence.content} alt="Original receipt" className="w-full rounded-[10px] border border-border-input" />
+          ) : (
+            <pre
+              key={id}
+              className="m-0 bg-[#F6F5F0] border border-border-row rounded-[10px] px-3.5 py-3 text-sm whitespace-pre-wrap break-words font-sans"
+            >
+              {evidence.content}
+            </pre>
+          ),
+        )}
+      </div>
+    </div>
   );
 }
 

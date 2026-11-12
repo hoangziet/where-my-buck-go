@@ -94,6 +94,23 @@ export function listTransactions(): Promise<{ items: TransactionDto[] }> {
   return request("/api/transactions");
 }
 
+export function getTransaction(id: string): Promise<TransactionDto & { evidenceIds: string[] }> {
+  return request(`/api/transactions/${id}`);
+}
+
+export type EvidenceItem = { kind: "text"; content: string } | { kind: "image"; content: string };
+
+export async function getEvidence(id: string): Promise<EvidenceItem> {
+  const res = await fetch(`/api/evidence/${id}`, { credentials: "include" });
+  if (!res.ok) throw new ApiError(res.status, "Could not load evidence");
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.startsWith("image/")) {
+    const blob = await res.blob();
+    return { kind: "image", content: URL.createObjectURL(blob) };
+  }
+  return { kind: "text", content: await res.text() };
+}
+
 export interface ProposalDto {
   id: string;
   version: number;
