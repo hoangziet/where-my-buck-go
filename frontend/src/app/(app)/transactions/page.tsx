@@ -32,11 +32,18 @@ function dayGroup(t: TransactionDto, today: string, yesterday: string): string {
   return "Earlier";
 }
 
+// Defends against CSV/formula injection: spreadsheet apps execute a cell starting with
+// =, +, -, or @ as a formula, and description is free text an attacker could control
+// (chat message or receipt image text). Prefixing with a tab keeps it inert as text.
+function csvSafe(value: string): string {
+  return /^[=+\-@]/.test(value) ? `\t${value}` : value;
+}
+
 function toCsv(items: TransactionDto[]): string {
   const header = "date,time,direction,category,amount,currency,description";
   const rows = items.map((t) =>
     [t.occurredDate, t.occurredTime, t.direction, t.category, t.amount, t.currency,
-      `"${t.description.replace(/"/g, '""')}"`].join(","),
+      `"${csvSafe(t.description).replace(/"/g, '""')}"`].join(","),
   );
   return [header, ...rows].join("\n");
 }
