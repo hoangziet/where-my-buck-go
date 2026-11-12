@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg: #FBFAF6;
+  --color-surface: #FFFFFF;
+  --color-ink: #16201A;
+  --color-ink-2: #33403A;
+  --color-ink-3: #4A554D;
+  --color-muted: #5B665E;
+  --color-border: #E8E6DE;
+  --color-border-input: #E3E1D8;
+  --color-border-row: #F1EFE9;
+  --color-border-nav: #ECEAE2;
+  --color-accent: #1F6B44;
+  --color-accent-strong: #14502F;
+  --color-accent-soft-bg: #EEF5F0;
+  --color-accent-soft-border: #BFDCC9;
+  --color-chart-light: #A9D3B8;
+  --color-danger: #B42318;
+}
+
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-ink: var(--color-ink);
+  --color-ink-2: var(--color-ink-2);
+  --color-ink-3: var(--color-ink-3);
+  --color-muted: var(--color-muted);
+  --color-border: var(--color-border);
+  --color-border-input: var(--color-border-input);
+  --color-border-row: var(--color-border-row);
+  --color-border-nav: var(--color-border-nav);
+  --color-accent: var(--color-accent);
+  --color-accent-strong: var(--color-accent-strong);
+  --color-accent-soft-bg: var(--color-accent-soft-bg);
+  --color-accent-soft-border: var(--color-accent-soft-border);
+  --color-chart-light: var(--color-chart-light);
+  --color-danger: var(--color-danger);
+
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}

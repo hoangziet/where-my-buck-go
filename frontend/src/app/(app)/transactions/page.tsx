@@ -1,0 +1,374 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Search, Download, Plus, Trash2, ChevronDown } from "lucide-react";
+import { formatVND } from "@/lib/format";
+import * as api from "@/lib/api";
+import type { Category, TransactionDto } from "@/lib/api";
+import { CATEGORY_LABELS } from "@/lib/api";
+
+type TypeFilter = "all" | "expense" | "income";
+type CategoryFilter = "all" | Category;
+
+function displayDate(t: TransactionDto): string {
+  const [, month, day] = t.occurredDate.split("-");
+  return `${day}/${month} ${t.occurredTime}`;
+}
+
+function dayGroup(t: TransactionDto, today: string, yesterday: string): string {
+  if (t.occurredDate === today) return "Today";
+  if (t.occurredDate === yesterday) return "Yesterday";
+  return "Earlier";
+}
+
+function toCsv(items: TransactionDto[]): string {
+  const header = "date,time,direction,category,amount,currency,description";
+  const rows = items.map((t) =>
+    [t.occurredDate, t.occurredTime, t.direction, t.category, t.amount, t.currency,
+      `"${t.description.replace(/"/g, '""')}"`].join(","),
+  );
+  return [header, ...rows].join("\n");
+}
+
+function downloadCsv(items: TransactionDto[]) {
+  const blob = new Blob([toCsv(items)], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export default function TransactionsPage() {
+  const [items, setItems] = useState<TransactionDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [lastDeleted, setLastDeleted] = useState<{ tx: TransactionDto; deletedVersion: number } | null>(null);
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .listTransactions()
+      .then((res) => setItems(res.items))
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load transactions"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const visible = useMemo(() => {
+    return items.filter((t) => {
+      if (typeFilter === "expense" && t.direction !== "expense") return false;
+      if (typeFilter === "income" && t.direction !== "income") return false;
+      if (categoryFilter !== "all" && t.category !== categoryFilter) return false;
+      if (query && !t.description.toLowerCase().includes(query.toLowerCase())) return false;
+      return true;
+    });
+  }, [items, typeFilter, categoryFilter, query]);
+
+  async function handleDelete(t: TransactionDto) {
+    setError(null);
+    try {
+      const proposal = await api.proposeChange("delete", t.id, t.version, `Deleted "${t.description}" from Transactions page`);
+      const { transaction } = await api.confirmProposal(proposal.id, proposal.version);
+      setItems((prev) => prev.filter((item) => item.id !== t.id));
+      setLastDeleted({ tx: t, deletedVersion: transaction.version });
+      setRevealedId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete transaction");
+    }
+  }
+
+  async function handleUndo() {
+    if (!lastDeleted) return;
+    setError(null);
+    try {
+      const { tx, deletedVersion } = lastDeleted;
+      const proposal = await api.proposeChange(
+        "undo",
+        tx.id,
+        deletedVersion,
+        `Restored "${tx.description}" from Transactions page`,
+      );
+      const { transaction } = await api.confirmProposal(proposal.id, proposal.version);
+      setItems((prev) => [...prev, transaction].sort((a, b) => (a.occurredDate < b.occurredDate ? 1 : -1)));
+      setLastDeleted(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to undo delete");
+    }
+  }
+
+  const groups = useMemo(() => {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const yesterdayDate = new Date(now);
+    yesterdayDate.setDate(now.getDate() - 1);
+    const yesterday = yesterdayDate.toISOString().slice(0, 10);
+    const map = new Map<string, TransactionDto[]>();
+    for (const t of visible) {
+      const g = dayGroup(t, today, yesterday);
+      if (!map.has(g)) map.set(g, []);
+      map.get(g)!.push(t);
+    }
+    return Array.from(map.entries());
+  }, [visible]);
+
+  return (
+    <main className="flex-1 flex flex-col gap-5 px-4 pb-28 pt-6 lg:px-10 lg:pt-8 lg:pb-12 relative">
+      {/* Desktop header */}
+      <div className="hidden lg:flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="m-0 font-display font-semibold text-[32px] tracking-tight">Transactions</h1>
+          <span className="text-sm text-muted">{loading ? "Loading…" : `${visible.length} transactions`}</span>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+          <button
+            type="button"
+            onClick={() => downloadCsv(visible)}
+            disabled={visible.length === 0}
+            className="flex items-center gap-2 bg-surface border border-border-input rounded-[10px] px-3.5 min-h-11 text-sm font-medium cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC] disabled:opacity-50"
+          >
+            <Download size={16} />
+            Export CSV
+          </button>
+          <Link
+            href="/chat"
+            className="flex items-center gap-2 bg-accent text-white no-underline border-0 rounded-[10px] px-4 min-h-11 text-sm font-semibold cursor-pointer transition-colors duration-150 hover:bg-accent-strong"
+          >
+            <Plus size={16} strokeWidth={2.2} />
+            Add transaction
+          </Link>
+        </div>
+      </div>
+
+      {/* Mobile header */}
+      <div className="lg:hidden flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h1 className="m-0 font-display font-semibold text-2xl tracking-tight">Transactions</h1>
+          <Link
+            href="/chat"
+            aria-label="Add transaction"
+            className="w-11 h-11 rounded-xl border border-border-input bg-surface flex items-center justify-center no-underline text-ink cursor-pointer transition-colors duration-150 active:bg-[#F4F2EC]"
+          >
+            <Plus size={18} strokeWidth={2.2} />
+          </Link>
+        </div>
+        <SearchInput id="m-tx-search" query={query} onChange={setQuery} placeholder="Search" />
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {(["all", "expense", "income"] as TypeFilter[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={typeFilter === t}
+              onClick={() => setTypeFilter(t)}
+              className={`shrink-0 text-[13px] rounded-full px-3.5 min-h-9 cursor-pointer transition-colors duration-150 ${
+                typeFilter === t ? "bg-ink text-white font-semibold" : "bg-surface border border-border-input active:bg-[#F4F2EC]"
+              }`}
+            >
+              {t === "all" ? "All" : t === "expense" ? "Expenses" : "Income"}
+            </button>
+          ))}
+          <select
+            aria-label="Category"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
+            className="shrink-0 text-[13px] bg-surface border border-border-input rounded-full px-3.5 min-h-9 cursor-pointer"
+          >
+            <option value="all">Category</option>
+            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Desktop filters */}
+      <div className="hidden lg:flex flex-wrap gap-2.5 items-center">
+        <div className="flex-1 min-w-[280px]">
+          <SearchInput id="tx-search" query={query} onChange={setQuery} placeholder="Search description…" />
+        </div>
+        <div role="group" aria-label="Type" className="flex bg-[#F1EFE8] rounded-[10px] p-[3px]">
+          {(["all", "expense", "income"] as TypeFilter[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={typeFilter === t}
+              onClick={() => setTypeFilter(t)}
+              className={`text-[13px] rounded-lg min-h-[38px] px-3.5 cursor-pointer transition-colors duration-150 ${
+                typeFilter === t ? "bg-white font-semibold" : "bg-transparent hover:text-ink"
+              }`}
+            >
+              {t === "all" ? "All" : t === "expense" ? "Expenses" : "Income"}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <select
+            aria-label="Category"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
+            className="appearance-none flex items-center gap-2 bg-surface border border-border-input rounded-[10px] pl-3.5 pr-8 min-h-11 text-sm cursor-pointer"
+          >
+            <option value="all">All categories</option>
+            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        </div>
+      </div>
+
+      {error && <p className="m-0 text-sm text-danger">{error}</p>}
+
+      {!loading && visible.length === 0 && (
+        <p className="m-0 text-sm text-muted">No transactions yet. Add one from the AI Chat.</p>
+      )}
+
+      {/* Desktop table */}
+      <div className="hidden lg:block bg-surface border border-border rounded-2xl overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse text-sm">
+          <thead>
+            <tr className="text-muted text-xs uppercase tracking-wide">
+              <th className="text-left py-3.5 px-5 font-semibold border-b border-border-nav">Date</th>
+              <th className="text-left py-3.5 px-3 font-semibold border-b border-border-nav">Description</th>
+              <th className="text-left py-3.5 px-3 font-semibold border-b border-border-nav">Category</th>
+              <th className="text-left py-3.5 px-3 font-semibold border-b border-border-nav">Type</th>
+              <th className="text-right py-3.5 px-3 font-semibold border-b border-border-nav">Amount</th>
+              <th className="py-3.5 px-5 border-b border-border-nav">
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((t) => (
+              <tr key={t.id} className="transition-colors duration-150 hover:bg-[#FAF9F5]">
+                <td className="py-3 px-5 border-b border-border-row text-ink-3 whitespace-nowrap font-mono text-[13px]">
+                  {displayDate(t)}
+                </td>
+                <td className="py-3 px-3 border-b border-border-row font-medium">{t.description}</td>
+                <td className="py-3 px-3 border-b border-border-row">
+                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#F4F2EC] text-[13px] text-ink-2">
+                    {CATEGORY_LABELS[t.category]}
+                  </span>
+                </td>
+                <td className="py-3 px-3 border-b border-border-row text-[13px] text-ink-3 capitalize">{t.direction}</td>
+                <td
+                  className={`py-3 px-3 border-b border-border-row text-right font-mono font-medium whitespace-nowrap ${
+                    t.direction === "income" ? "text-accent" : "text-ink"
+                  }`}
+                >
+                  {formatVND(t.direction === "income" ? Number(t.amount) : -Number(t.amount))}
+                </td>
+                <td className="py-2 pr-5 pl-3 border-b border-border-row whitespace-nowrap text-right">
+                  <button
+                    type="button"
+                    aria-label="Delete transaction"
+                    onClick={() => handleDelete(t)}
+                    className="w-9 h-9 rounded-lg text-ink-3 cursor-pointer transition-colors duration-150 hover:bg-[#FBEAE8] hover:text-danger"
+                  >
+                    <Trash2 size={16} className="mx-auto" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile grouped list */}
+      <div className="lg:hidden flex flex-col gap-1.5">
+        {groups.map(([group, groupItems]) => {
+          const total = groupItems.reduce((a, t) => a + (t.direction === "income" ? Number(t.amount) : -Number(t.amount)), 0);
+          return (
+            <div key={group} className="flex flex-col gap-1.5">
+              <div className="flex justify-between text-xs text-muted px-0.5 pt-3 pb-1">
+                <span className="font-semibold uppercase tracking-wide">{group}</span>
+                <span className="font-mono">{formatVND(total)}</span>
+              </div>
+              <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+                {groupItems.map((t, i) => (
+                  <div key={t.id} className={`flex items-stretch ${i > 0 ? "border-t border-border-row" : ""}`}>
+                    <button
+                      type="button"
+                      onClick={() => setRevealedId(revealedId === t.id ? null : t.id)}
+                      className="flex-1 flex items-center gap-2.5 px-3.5 py-2.5 bg-surface text-left cursor-pointer transition-colors duration-150 active:bg-[#FAF9F5]"
+                    >
+                      <div className="flex-1 flex flex-col">
+                        <span className="font-medium text-sm">{t.description}</span>
+                        <span className="text-xs text-muted">{CATEGORY_LABELS[t.category]}</span>
+                      </div>
+                      <span className={`font-mono text-[13px] ${t.direction === "income" ? "text-accent" : ""}`}>
+                        {formatVND(t.direction === "income" ? Number(t.amount) : -Number(t.amount))}
+                      </span>
+                    </button>
+                    {revealedId === t.id && (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(t)}
+                        className="text-xs font-semibold w-[72px] border-0 bg-danger text-white cursor-pointer transition-colors duration-150 active:bg-[#8F1B13]"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {lastDeleted && (
+        <div
+          role="status"
+          className="fixed left-4 right-4 bottom-24 lg:static lg:self-center lg:left-auto lg:right-auto lg:bottom-auto flex items-center justify-between gap-4 bg-ink text-white rounded-xl pl-4 pr-1.5 py-1.5 text-sm shadow-[0_12px_28px_-12px_rgba(22,32,26,0.45)] z-20"
+        >
+          <span>Deleted &ldquo;{lastDeleted.tx.description}&rdquo;</span>
+          <button
+            type="button"
+            onClick={handleUndo}
+            className="font-semibold bg-white text-ink rounded-lg px-3.5 min-h-9 cursor-pointer transition-colors duration-150 hover:bg-[#EDEBE4]"
+          >
+            Undo
+          </button>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function SearchInput({
+  id,
+  query,
+  onChange,
+  placeholder,
+}: {
+  id: string;
+  query: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 bg-surface border border-border-input rounded-[10px] px-3.5 min-h-11 transition-colors duration-150 has-[input:focus]:border-accent">
+      <Search size={17} className="text-muted shrink-0" />
+      <label htmlFor={id} className="sr-only">
+        Search transactions
+      </label>
+      <input
+        id={id}
+        type="search"
+        value={query}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="text-sm border-0 outline-none bg-transparent flex-1 min-w-0 text-ink"
+      />
+    </div>
+  );
+}

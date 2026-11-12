@@ -1,0 +1,47 @@
+[
+ {
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "terrazzo",
+  "axes": "light/geometric-sans/warm",
+  "hero": "none",
+  "nav": "icon rail, 3 destinations (chat, history, account), collapses to a bottom bar under 48rem",
+  "footer": "none",
+  "imagery": "none",
+  "photos": [],
+  "entry": "chat-shell-redesign",
+  "fingerprint": "icon-rail-claude-style-composer",
+  "sections": [
+   "chat",
+   "history",
+   "account"
+  ],
+  "signature": "the chat composer with inline draft cards",
+  "waived": [],
+  "prompt": "redesign the authenticated app into a chat/history/account shell with a Claude-style composer",
+  "date": "2026-11-11",
+  "mode": "redesign",
+  "depth": "full"
+ },
+ {
+  "scope": "app",
+  "shape": "owner sign-in",
+  "theme": "terrazzo",
+  "axes": "light/geometric-sans/warm",
+  "hero": "none",
+  "nav": "wordmark with language choice",
+  "footer": "none",
+  "imagery": "none",
+  "photos": [],
+  "entry": "milestone1-login",
+  "fingerprint": "private-sign-in-two-column",
+  "sections": [
+   "sign-in"
+  ],
+  "signature": "private sign-in form",
+  "waived": [],
+  "prompt": "Where My Buck Go owner login web-first milestone 1",
+  "date": "2026-11-11",
+  "mode": "build"
+ }
+]

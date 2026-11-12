@@ -1,0 +1,71 @@
+services:
+  db:
+    image: postgres:17-alpine
+    # Keep the existing local database identity so an existing volume remains usable.
+    environment:
+      POSTGRES_DB: fingpt
+      POSTGRES_USER: fingpt
+      POSTGRES_PASSWORD: local-only-change-me
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - local_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fingpt -d fingpt"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://fingpt:local-only-change-me@db:5432/fingpt
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://fingpt:local-only-change-me@db:5432/fingpt
+      AUTH_HMAC_KEY: ${AUTH_HMAC_KEY:?Set AUTH_HMAC_KEY in .env}
+      APP_ENV: ${APP_ENV:-development}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
+      EVIDENCE_DIR: /data/evidence
+    volumes:
+      - local_evidence:/data/evidence
+    ports:
+      - "127.0.0.1:5000:5000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        BACKEND_ORIGIN: http://backend:5000
+    environment:
+      BACKEND_ORIGIN: http://backend:5000
+    ports:
+      - "127.0.0.1:3100:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  local_pgdata:
+  local_evidence:

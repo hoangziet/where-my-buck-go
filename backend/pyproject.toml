@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "where-my-buck-go"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+  "Flask>=3.0,<4",
+  "SQLAlchemy>=2.0,<3",
+  "psycopg[binary]>=3.1,<4",
+  "alembic>=1.13,<2",
+  "argon2-cffi>=23.1,<26",
+  "gunicorn>=22,<24",
+  "google-genai>=1.0,<4",
+  "httpx>=0.27,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.9,<1", "mypy>=1.14,<2", "types-Flask>=1,<2"]
+
+[project.scripts]
+wmbg-bootstrap = "where_my_buck_go.cli:main"
+wmbg-reset-password = "where_my_buck_go.cli:reset_main"
+wmbg-gemini-smoke = "where_my_buck_go.gemini_smoke:main"
+wmbg-gemini-image-smoke = "where_my_buck_go.gemini_image_smoke:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["where_my_buck_go*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+packages = ["where_my_buck_go"]
