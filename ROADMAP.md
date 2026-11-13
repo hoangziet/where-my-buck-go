@@ -41,12 +41,13 @@ The goal is a dependable local web app for the owner. Production deployment is a
 ## Current Evidence
 
 - Chat/image retry keys and proposal confirm/discard retry keys are retained for the same user action; failed discard remains visible and retryable.
-- Playwright browser regression tests cover text-draft review/discard, confirmation retry with the same idempotency key, staged image paste with a caption, separate edit/delete/undo confirmations, filtered CSV export, and CSV formula-injection protection.
+- Playwright browser regression tests cover sign-in/sign-out, text-draft review/discard, confirmation retry with the same idempotency key, staged image paste with a caption, separate edit/delete/undo confirmations, filtered CSV export, and CSV formula-injection protection.
 - Backend test suite passed: 101 tests. Ruff, frontend lint, and frontend production build passed.
 - Strict mypy passes all 27 backend source files; CI now fails on type-check errors.
 - Local Docker Compose is running PostgreSQL, backend, and frontend. Backend health returned `{"status":"ok"}`, `/login` returned HTTP 200, and the Gemini text smoke test passed without creating a transaction.
-- The owner signed in through the browser; dashboard, transactions, chat, and settings pages loaded. A live text intake produced the expected draft preview, and discarding it left Transactions empty. Confirmed transaction creation and correction journeys remain unverified.
-- A synthetic receipt passed through the live image flow: Gemini extracted 12,000 VND and the exact date/time, then the draft was discarded; Transactions remained empty.
+- The owner signed in through the browser; dashboard, transactions, chat, and settings pages loaded. A live text intake produced the expected draft preview, and discarding it did not write a transaction. A separate synthetic text conversation reloaded from Recent chats with its messages intact.
+- A synthetic receipt passed through the live image flow: Gemini extracted 12,000 VND and the exact date/time, then the draft was discarded without a ledger write.
 - Transactions-page edit, delete, and undo now create a reviewable proposal first and require a separate confirmation before applying it. Playwright verifies the confirm endpoint is untouched until that explicit action; backend PostgreSQL tests cover persisted ledger changes.
-- The live local owner journey confirmed one disposable text transaction, edited it through a separate preview, soft deleted it, restored it through a separate undo preview, and viewed its original evidence. Dashboard totals reflected the edited amount; the test transaction is now soft deleted, so the visible Transactions list is empty.
+- The live local owner journey confirmed one disposable text transaction, edited it through a separate preview, soft deleted it, restored it through a separate undo preview, and viewed its original evidence. Dashboard totals reflected the edited amount.
+- A second live journey confirmed a synthetic receipt transaction for 4,321 VND at the expected date/time and verified that the original image opens from Transactions evidence, then soft deleted it. The text and image test records are both soft deleted; the visible Transactions list is empty. The real owner session was left signed in.
 - Frontend image validation now matches the backend's 4,000,000-byte limit; chat history load failures are shown in the conversation, and image preview URLs are revoked when replaced, removed, or unmounted.
