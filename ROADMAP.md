@@ -42,8 +42,10 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 - Chat/image retry keys and proposal confirm/discard retry keys are retained for the same user action; failed discard remains visible and retryable.
 - Playwright browser regression tests cover sign-in/sign-out, text-draft review/discard, confirmation retry with the same idempotency key, staged image paste with a caption, separate edit/delete/undo confirmations, filtered CSV export, and CSV formula-injection protection.
+- All 7 Playwright tests pass; frontend lint and production build pass.
 - Backend test suite passed: 101 tests. Ruff, frontend lint, and frontend production build passed.
 - Strict mypy passes all 27 backend source files; CI now fails on type-check errors.
+- Frontend production and full dependency audits report zero vulnerabilities. The runtime image omits development and optional peer packages, including Playwright and ESLint; the minimatch override is scoped to the TypeScript ESLint parser tree.
 - Local Docker Compose is running PostgreSQL, backend, and frontend. Backend health returned `{"status":"ok"}`, `/login` returned HTTP 200, and the Gemini text smoke test passed without creating a transaction.
 - The owner signed in through the browser; dashboard, transactions, chat, and settings pages loaded. A live text intake produced the expected draft preview, and discarding it did not write a transaction. A separate synthetic text conversation reloaded from Recent chats with its messages intact.
 - A synthetic receipt passed through the live image flow: Gemini extracted 12,000 VND and the exact date/time, then the draft was discarded without a ledger write.
