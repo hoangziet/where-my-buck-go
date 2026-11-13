@@ -10,5 +10,7 @@ frontend/dist/
 frontend/*.tsbuildinfo
 frontend/.next/
 frontend/.next-*/
+frontend/test-results/
+frontend/playwright-report/
 .env
 .local-evidence/

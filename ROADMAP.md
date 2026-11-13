@@ -41,6 +41,7 @@ The goal is a dependable local web app for the owner. Production deployment is a
 ## Current Evidence
 
 - Chat/image retry keys and proposal confirm/discard retry keys are retained for the same user action; failed discard remains visible and retryable.
+- Playwright browser regression tests cover text-draft review/discard and staged image paste with a caption; the image is not submitted until Send.
 - Backend test suite passed: 101 tests. Ruff, frontend lint, and frontend production build passed.
 - Strict mypy passes all 27 backend source files; CI now fails on type-check errors.
 - Local Docker Compose is running PostgreSQL, backend, and frontend. Backend health returned `{"status":"ok"}`, `/login` returned HTTP 200, and the Gemini text smoke test passed without creating a transaction.
