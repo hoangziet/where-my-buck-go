@@ -6,7 +6,8 @@ confirm action; nothing the model proposes is written or executed directly. Atta
 creates a real draft with the original photo stored as evidence, same as a text message creates a draft
 with the original text as evidence — both are viewable later from the Transactions page. Chat history is
 persisted server-side (listed in the sidebar, resumable), and Q&A answers can be pinned to the dashboard.
-Gemini also has separate local smoke tests. `SRD.md` records the agreed product rules; no old SQLite
+Gemini also has separate local smoke tests. `SRD.md` records the agreed product rules and `ROADMAP.md`
+tracks readiness work; no old SQLite
 code or data is imported.
 
 ## Run with Docker Compose
@@ -56,8 +57,9 @@ confirmable draft with the original image stored as evidence.
 
 ## Ledger API (local)
 
-All ledger writes require an authenticated session, its `X-CSRF-Token` header, a new UUID
-`Idempotency-Key` header, and `expectedVersion` in JSON. Creating a proposal uses version `0`;
+All ledger writes require an authenticated session, its `X-CSRF-Token` header, a unique UUID
+`Idempotency-Key` per logical operation, and `expectedVersion` in JSON. Reuse the same key when
+retrying that operation after a timeout or lost response. Creating a proposal uses version `0`;
 confirming or editing a proposal uses its previewed version. Reusing a key with a different body
 returns `409`; repeating an identical request returns the original response. The model cannot call
 the confirm route. `POST /api/proposals` creates a draft; `PATCH /api/proposals/<id>` completes or
