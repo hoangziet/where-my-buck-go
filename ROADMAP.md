@@ -46,4 +46,5 @@ The goal is a dependable local web app for the owner. Production deployment is a
 - Strict mypy passes all 27 backend source files; CI now fails on type-check errors.
 - Local Docker Compose is running PostgreSQL, backend, and frontend. Backend health returned `{"status":"ok"}`, `/login` returned HTTP 200, and the Gemini text smoke test passed without creating a transaction.
 - The owner signed in through the browser; dashboard, transactions, chat, and settings pages loaded. A live text intake produced the expected draft preview, and discarding it left Transactions empty. Confirmed transaction creation and correction journeys remain unverified.
+- A synthetic receipt passed through the live image flow: Gemini extracted 12,000 VND and the exact date/time, then the draft was discarded; Transactions remained empty.
 - Frontend image validation now matches the backend's 4,000,000-byte limit; chat history load failures are shown in the conversation, and image preview URLs are revoked when replaced, removed, or unmounted.
