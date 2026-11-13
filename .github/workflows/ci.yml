@@ -86,6 +86,23 @@ jobs:
         working-directory: frontend
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+      - name: Bootstrap an isolated CI owner
+        run: >-
+          docker compose -f compose.local.yml exec -T backend python -c
+          'from where_my_buck_go.adapters.auth_repo import PostgresAuthStore;
+          from where_my_buck_go.adapters.db import engine_for;
+          from where_my_buck_go.services.auth import AuthService;
+          import os;
+          auth = AuthService(PostgresAuthStore(engine_for(os.environ["DATABASE_URL"])), os.environ["AUTH_HMAC_KEY"].encode());
+          assert auth.bootstrap("live-ci-owner", "ci-only-password-2026")'
+      - name: Verify live authenticated owner journey
+        run: npx playwright test e2e/live-stack.spec.ts
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          RUN_LIVE_E2E: "1"
+          E2E_OWNER_USERNAME: live-ci-owner
+          E2E_OWNER_PASSWORD: ci-only-password-2026
       - name: Stop the stack
         if: always()
         run: docker compose -f compose.local.yml down

@@ -12,7 +12,7 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 **Acceptance:** all services stay healthy after restart; login and authenticated navigation work in the browser.
 
-### 2. Core Owner Journeys — In Progress
+### 2. Core Owner Journeys — Complete
 
 - Verify text intake creates a draft, explicit confirmation creates exactly one transaction, and evidence is viewable.
 - Verify one-image receipt intake with an optional caption, draft correction/confirmation, and evidence viewing.
@@ -43,6 +43,8 @@ The goal is a dependable local web app for the owner. Production deployment is a
 - Chat/image retry keys and proposal confirm/discard retry keys are retained for the same user action; failed discard remains visible and retryable.
 - Playwright browser regression tests cover sign-in/sign-out, text-draft review/discard, confirmation retry with the same idempotency key, staged image paste with a caption, separate edit/delete/undo confirmations, filtered CSV export, and CSV formula-injection protection.
 - The 7-test Playwright suite can target `PLAYWRIGHT_BASE_URL`; all 7 tests passed against the production frontend container. CSV download and filtered contents were verified using controlled API fixtures, and the Docker Compose CI job runs this suite against the built container.
+- A separate live-stack Playwright journey passed against isolated Docker PostgreSQL, Flask, and production Next.js: it logged in, created and confirmed a disposable proposal through the real API, checked persisted transactions, filtered CSV contents and report totals, soft deleted the row, verified API/report totals returned to zero, and logged out.
+- The Docker Compose CI job provisions its own disposable owner and runs this live-stack test after the fixture-driven suite. The equivalent isolated-stack sequence passed locally; GitHub has not yet run it on current commits.
 - All 7 Playwright tests pass; frontend lint and production build pass.
 - Full local CI checks on the current worktree passed: 101 backend tests, Ruff, strict mypy, clean `npm ci`, frontend lint/build, and all 7 Playwright tests; npm audit reports zero vulnerabilities. Local `playwright install --with-deps` needs sudo unavailable here, while `playwright install chromium` and the browser suite pass.
 - Strict mypy passes all 27 backend source files; CI now fails on type-check errors.
@@ -54,6 +56,6 @@ The goal is a dependable local web app for the owner. Production deployment is a
 - A synthetic receipt passed through the live image flow: Gemini extracted 12,000 VND and the exact date/time, then the draft was discarded without a ledger write.
 - Transactions-page edit, delete, and undo now create a reviewable proposal first and require a separate confirmation before applying it. Playwright verifies the confirm endpoint is untouched until that explicit action; backend PostgreSQL tests cover persisted ledger changes.
 - The live local owner journey confirmed one disposable text transaction, edited it through a separate preview, soft deleted it, restored it through a separate undo preview, and viewed its original evidence. Dashboard totals reflected the edited amount.
-- A separate live owner check confirmed a synthetic expense appeared in Transactions and the matching dashboard/category totals, applied expense and category filters, then soft deleted the row. The dashboard and transaction list returned to zero afterward. The browser automation bridge did not expose the CSV download event, so download-file verification relies on the Playwright run against the production frontend with controlled API fixtures.
+- A separate live owner check confirmed a synthetic expense appeared in Transactions and the matching dashboard/category totals, applied expense and category filters, then soft deleted the row. The dashboard and transaction list returned to zero afterward.
 - A second live journey confirmed a synthetic receipt transaction for 4,321 VND at the expected date/time and verified that the original image opens from Transactions evidence, then soft deleted it. The text and image test records are both soft deleted; the visible Transactions list is empty. The real owner session was left signed in.
 - Frontend image validation now matches the backend's 4,000,000-byte limit; chat history load failures are shown in the conversation, and image preview URLs are revoked when replaced, removed, or unmounted.
