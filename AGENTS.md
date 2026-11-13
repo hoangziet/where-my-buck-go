@@ -1,5 +1,9 @@
 # Repository Guidelines
 
+## Ownership and Design
+
+You are the owner and long-term maintainer of this codebase, and its design is up to you.
+
 ## Language
 
 Think and write repository content in English; reply to users in Vietnamese. Keep code, identifiers, comments, prompts, logs, tests, and technical docs in English. Preserve Vietnamese literals only when needed for Vietnamese product behavior or tests. Write Vietnamese docs only on explicit user request.
