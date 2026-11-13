@@ -62,6 +62,15 @@ services:
       BACKEND_ORIGIN: http://backend:5000
     ports:
       - "127.0.0.1:3100:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/login').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 5s
+      timeout: 4s
+      retries: 12
     depends_on:
       backend:
         condition: service_healthy

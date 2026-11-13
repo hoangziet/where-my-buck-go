@@ -4,7 +4,7 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 ## Milestones
 
-### 1. Local Runtime — In Progress
+### 1. Local Runtime — Complete
 
 - Build and start PostgreSQL, migrations, Flask, and Next.js with `docker compose -f compose.local.yml up -d --build`.
 - Verify all services are healthy, `/api/health` returns `{"status":"ok"}`, and `/login` serves the frontend.
@@ -48,6 +48,7 @@ The goal is a dependable local web app for the owner. Production deployment is a
 - Frontend production and full dependency audits report zero vulnerabilities. The runtime image omits development and optional peer packages, including Playwright and ESLint; the minimatch override is scoped to the TypeScript ESLint parser tree.
 - At the latest remote check, GitHub main CI was green on `653ebe83`, while local `main` is 15 commits ahead at `845040e`; remote CI has not run on these local commits.
 - Local Docker Compose is running PostgreSQL, backend, and frontend. Backend health returned `{"status":"ok"}`, `/login` returned HTTP 200, and the Gemini text smoke test passed without creating a transaction.
+- Docker Compose now health-checks the frontend through its `/login` route. After rebuilding/recreating the stack, PostgreSQL, backend, and frontend all reported healthy; authenticated Transactions navigation and the existing owner session remained available, and the visible ledger remained empty.
 - The owner signed in through the browser; dashboard, transactions, chat, and settings pages loaded. A live text intake produced the expected draft preview, and discarding it did not write a transaction. A separate synthetic text conversation reloaded from Recent chats with its messages intact.
 - A synthetic receipt passed through the live image flow: Gemini extracted 12,000 VND and the exact date/time, then the draft was discarded without a ledger write.
 - Transactions-page edit, delete, and undo now create a reviewable proposal first and require a separate confirmation before applying it. Playwright verifies the confirm endpoint is untouched until that explicit action; backend PostgreSQL tests cover persisted ledger changes.
