@@ -29,6 +29,35 @@ Stop the app with `docker compose -f compose.local.yml down`; this keeps the Pos
 volumes. Do not add `-v` if you want to keep local data. The database retains its existing local
 identity and volume so current owner accounts and sessions remain available.
 
+## Local backup and restore
+
+Create a consistent, checksummed backup with `./scripts/backup-local.sh` (or pass a destination such as
+`./scripts/backup-local.sh /media/encrypted-drive/where-my-buck-go`). The command pauses the frontend and
+backend while it captures the PostgreSQL database and evidence volume, validates the archive, then starts
+the app again. Archives are written with owner-only permissions; store copies on encrypted media and keep
+`.env`/`AUTH_HMAC_KEY` separately. The default `.backups/` directory is ignored by Git.
+
+For a restore, verify the sidecar with `cd /path/to/backup && sha256sum -c <archive>.tar.gz.sha256`, then
+extract the archive to a private temporary directory. Confirm the target stack and stop the frontend/backend
+before replacing its database:
+
+```sh
+docker compose -f compose.local.yml stop frontend backend
+docker compose -f compose.local.yml exec -T db dropdb --if-exists -U fingpt fingpt
+docker compose -f compose.local.yml exec -T db createdb -U fingpt -O fingpt fingpt
+db_container="$(docker compose -f compose.local.yml ps -q db)"
+docker cp /path/to/extracted/database.dump "$db_container:/tmp/wmbg-restore.dump"
+docker compose -f compose.local.yml exec -T -u 0 db pg_restore --exit-on-error --no-owner -U fingpt -d fingpt /tmp/wmbg-restore.dump
+docker compose -f compose.local.yml exec -T -u 0 db unlink /tmp/wmbg-restore.dump
+backend_container="$(docker compose -f compose.local.yml ps -aq backend)"
+docker cp /path/to/extracted/evidence/. "$backend_container:/data/evidence/"
+docker compose -f compose.local.yml up -d --wait frontend
+```
+
+Verify health checks and owner data after restore. Database replacement is destructive; confirm the target
+and keep the source backup untouched. Rehearse restores with an isolated Compose project before relying on
+a backup for recovery.
+
 ## Run services on the host
 
 For host-based development, use Python 3.10+, Node 20+, and Docker. Start only PostgreSQL with

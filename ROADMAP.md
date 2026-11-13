@@ -21,7 +21,7 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 **Acceptance:** each journey passes against the local Docker stack and its persisted state matches the UI.
 
-### 3. Reliability and Regression Coverage — In Progress
+### 3. Reliability and Regression Coverage — Complete
 
 - Align the frontend image byte limit with the backend limit and improve image URL cleanup and chat-history loading errors.
 - Add browser-level coverage for critical owner journeys and regression coverage for idempotency, authorization, and version conflicts.
@@ -30,7 +30,7 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 **Acceptance:** CI blocks regressions in critical flows and all required checks pass without ignored type-check failures.
 
-### 4. Production Readiness — Not Started
+### 4. Production Readiness — In Progress
 
 - Implement and verify production evidence storage (R2), deployment configuration, backups, migrations, health checks, and recovery procedures.
 - Review secrets, cookies, logging, resource limits, and operational monitoring.
@@ -42,14 +42,15 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 - Chat/image retry keys and proposal confirm/discard retry keys are retained for the same user action; failed discard remains visible and retryable.
 - Playwright browser regression tests cover sign-in/sign-out, text-draft review/discard, confirmation retry with the same idempotency key, staged image paste with a caption, separate edit/delete/undo confirmations, filtered CSV export, and CSV formula-injection protection.
-- The 7-test Playwright suite can target `PLAYWRIGHT_BASE_URL`; all 7 tests passed against the production frontend container. CSV download and filtered contents were verified using controlled API fixtures, and the Docker Compose CI job runs this suite against the built container.
+- The fixture-driven Playwright suite can target `PLAYWRIGHT_BASE_URL`; all 9 browser tests passed against the production frontend container. CSV download and filtered contents were verified using controlled API fixtures, and the Docker Compose CI job runs this suite against the built container.
 - A separate live-stack Playwright journey passed against isolated Docker PostgreSQL, Flask, and production Next.js: it logged in, created and confirmed a disposable proposal through the real API, checked persisted transactions, filtered CSV contents and report totals, soft deleted the row, verified API/report totals returned to zero, and logged out.
-- The Docker Compose CI job provisions its own disposable owner and runs this live-stack test after the fixture-driven suite. The equivalent isolated-stack sequence passed locally; GitHub has not yet run it on current commits.
-- All 7 Playwright tests pass; frontend lint and production build pass.
-- Full local CI checks on the current worktree passed: 101 backend tests, Ruff, strict mypy, clean `npm ci`, frontend lint/build, and all 7 Playwright tests; npm audit reports zero vulnerabilities. Local `playwright install --with-deps` needs sudo unavailable here, while `playwright install chromium` and the browser suite pass.
+- The Docker Compose CI job provisions its own disposable owner and runs this live-stack test after the fixture-driven suite. GitHub run `43358809631` passed all three jobs, including the live-stack journey.
+- The local backup command captures the PostgreSQL custom dump and evidence volume while app services are stopped, verifies the dump/archive, writes a private archive and SHA-256 sidecar, then restarts the app. A backup/restore rehearsal on isolated Compose projects restored the owner, soft-deleted transaction, and evidence file with its stored SHA-256; the restored app passed the live owner E2E. The CI workflow now includes backup/restore and reruns the owner journey after recovery; its GitHub result is pending.
+- Nine fixture-driven Playwright tests pass against the production frontend; the dedicated live-stack case passes separately. Frontend lint and TypeScript checks pass.
+- Full local CI checks on the prior current worktree passed: 101 backend tests, Ruff, strict mypy, clean `npm ci`, frontend lint/build, and 7 Playwright tests; npm audit reported zero vulnerabilities. The later added regression cases and live-stack journey also pass locally.
 - Strict mypy passes all 27 backend source files; CI now fails on type-check errors.
 - Frontend production and full dependency audits report zero vulnerabilities. The runtime image omits development and optional peer packages, including Playwright and ESLint; the minimatch override is scoped to the TypeScript ESLint parser tree.
-- At the latest remote check, GitHub main CI was green on `2c06c80`, which includes the previously-unpushed local commits (dependency trim/audit, local verification log, frontend/backend health checks, Compose smoke test, and the production Docker UI e2e job) plus the session's expired-session-prune and double-submit-guard fixes. All three CI jobs (backend, docker-compose, frontend) passed, including the live-stack Playwright journey against the built Docker containers.
+- GitHub main CI passed on `24197c4` (`43358809631`): backend tests, Ruff, strict mypy, frontend lint/build and Playwright, Docker Compose health/routes, and the authenticated live-stack owner journey all passed. The backup/restore steps added in this worktree are newer and await their own GitHub run.
 - Local Docker Compose is running PostgreSQL, backend, and frontend. Backend health returned `{"status":"ok"}`, `/login` returned HTTP 200, and the Gemini text smoke test passed without creating a transaction.
 - Docker Compose now health-checks the frontend through its `/login` route. After rebuilding/recreating the stack, PostgreSQL, backend, and frontend all reported healthy; authenticated Transactions navigation and the existing owner session remained available, and the visible ledger remained empty.
 - The owner signed in through the browser; dashboard, transactions, chat, and settings pages loaded. A live text intake produced the expected draft preview, and discarding it did not write a transaction. A separate synthetic text conversation reloaded from Recent chats with its messages intact.

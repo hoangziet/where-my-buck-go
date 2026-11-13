@@ -103,6 +103,35 @@ jobs:
           RUN_LIVE_E2E: "1"
           E2E_OWNER_USERNAME: live-ci-owner
           E2E_OWNER_PASSWORD: ci-only-password-2026
+      - name: Back up the disposable Docker stack
+        run: ./scripts/backup-local.sh "$RUNNER_TEMP/wmbg-backup"
+      - name: Restore database and evidence from backup
+        run: |
+          set -euo pipefail
+          archive="$(python3 -c 'import os; from pathlib import Path; print(next(Path(os.environ["RUNNER_TEMP"], "wmbg-backup").glob("*.tar.gz")))')"
+          archive_name="$(basename "$archive")"
+          (cd "$(dirname "$archive")" && sha256sum -c "$archive_name.sha256")
+          restore_dir="$RUNNER_TEMP/wmbg-restore"
+          mkdir -m 700 "$restore_dir"
+          tar -xzf "$archive" -C "$restore_dir"
+          docker compose -f compose.local.yml stop frontend backend
+          docker compose -f compose.local.yml exec -T db dropdb --if-exists -U fingpt fingpt
+          docker compose -f compose.local.yml exec -T db createdb -U fingpt -O fingpt fingpt
+          db_container="$(docker compose -f compose.local.yml ps -q db)"
+          docker cp "$restore_dir/database.dump" "$db_container:/tmp/wmbg-restore.dump"
+          docker compose -f compose.local.yml exec -T -u 0 db pg_restore --exit-on-error --no-owner -U fingpt -d fingpt /tmp/wmbg-restore.dump
+          docker compose -f compose.local.yml exec -T -u 0 db unlink /tmp/wmbg-restore.dump
+          backend_container="$(docker compose -f compose.local.yml ps -aq backend)"
+          docker cp "$restore_dir/evidence/." "$backend_container:/data/evidence/"
+          docker compose -f compose.local.yml up -d --wait --wait-timeout 120 frontend
+      - name: Recheck authenticated owner journey after restore
+        run: npx playwright test e2e/live-stack.spec.ts
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          RUN_LIVE_E2E: "1"
+          E2E_OWNER_USERNAME: live-ci-owner
+          E2E_OWNER_PASSWORD: ci-only-password-2026
       - name: Stop the stack
         if: always()
         run: docker compose -f compose.local.yml down
