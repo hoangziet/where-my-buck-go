@@ -37,6 +37,8 @@ type ConfirmState = Record<
   { transactionId: string } | "discarded" | "error" | "pending" | "discarding" | "discard_error"
 >;
 
+const MAX_IMAGE_BYTES = 4_000_000;
+
 export default function ChatPage() {
   return (
     <Suspense fallback={null}>
@@ -67,6 +69,12 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   const ownedChatId = useRef<string | undefined | null>(null);
   const retryRequest = useRef<ChatRetry | null>(null);
   const proposalIdempotencyKeys = useRef(new Map<string, string>());
+  const imagePreviewUrls = useRef(new Set<string>());
+
+  useEffect(() => () => {
+    for (const url of imagePreviewUrls.current) URL.revokeObjectURL(url);
+    imagePreviewUrls.current.clear();
+  }, []);
 
   function proposalActionKey(action: "confirm" | "discard", proposalId: string): string {
     const key = `${action}:${proposalId}`;
@@ -88,13 +96,27 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
       });
       return;
     }
-    api.getChatMessages(urlChatId).then((res) => {
-      setChatId(urlChatId);
-      setMessages(res.items.map((m) => (m.role === "user"
-        ? { role: "user", text: m.text }
-        : { role: "assistant", kind: "stored", text: m.text, debugTrace: m.debugTrace ?? undefined })));
-      setHistory(res.items.slice(-8).map((m) => ({ role: m.role, text: m.text })));
-    });
+    let active = true;
+    api.getChatMessages(urlChatId)
+      .then((res) => {
+        if (!active) return;
+        setChatId(urlChatId);
+        setMessages(res.items.map((m) => (m.role === "user"
+          ? { role: "user", text: m.text }
+          : { role: "assistant", kind: "stored", text: m.text, debugTrace: m.debugTrace ?? undefined })));
+        setHistory(res.items.slice(-8).map((m) => ({ role: m.role, text: m.text })));
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setMessages([{
+          role: "assistant",
+          kind: "error",
+          text: error instanceof Error ? error.message : "Could not load this chat.",
+        }]);
+      });
+    return () => {
+      active = false;
+    };
   }, [urlChatId]);
 
   function pushHistory(userText: string, assistantText: string) {
@@ -107,8 +129,6 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
     router.push("/chat");
   }
 
-  const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-
   function stageImage(file: File) {
     if (!(["image/png", "image/jpeg"].includes(file.type))) {
       setMessages((prev) => [...prev, { role: "assistant", kind: "error", text: "Only PNG and JPEG images are supported." }]);
@@ -118,13 +138,21 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
       setMessages((prev) => [...prev, { role: "assistant", kind: "error", text: "Image is larger than 4 MB. Please use a smaller photo." }]);
       return;
     }
-    if (pendingImageUrl) URL.revokeObjectURL(pendingImageUrl);
+    if (pendingImageUrl) {
+      URL.revokeObjectURL(pendingImageUrl);
+      imagePreviewUrls.current.delete(pendingImageUrl);
+    }
+    const previewUrl = URL.createObjectURL(file);
+    imagePreviewUrls.current.add(previewUrl);
     setPendingImage(file);
-    setPendingImageUrl(URL.createObjectURL(file));
+    setPendingImageUrl(previewUrl);
   }
 
   function removePendingImage() {
-    if (pendingImageUrl) URL.revokeObjectURL(pendingImageUrl);
+    if (pendingImageUrl) {
+      URL.revokeObjectURL(pendingImageUrl);
+      imagePreviewUrls.current.delete(pendingImageUrl);
+    }
     setPendingImage(null);
     setPendingImageUrl(null);
   }
@@ -205,6 +233,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
 
   async function sendImage(file: File, caption: string) {
     const previewUrl = pendingImageUrl ?? URL.createObjectURL(file);
+    imagePreviewUrls.current.add(previewUrl);
     const previousRetry = retryRequest.current;
     const request = previousRetry?.kind === "image"
       && previousRetry.file === file

@@ -21,7 +21,7 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 **Acceptance:** each journey passes against the local Docker stack and its persisted state matches the UI.
 
-### 3. Reliability and Regression Coverage — Not Started
+### 3. Reliability and Regression Coverage — In Progress
 
 - Align the frontend image byte limit with the backend limit and improve image URL cleanup and chat-history loading errors.
 - Add browser-level coverage for critical owner journeys and regression coverage for idempotency, authorization, and version conflicts.
@@ -45,3 +45,4 @@ The goal is a dependable local web app for the owner. Production deployment is a
 - Mypy still reports 19 errors from the backend working directory; CI currently allows these errors to pass.
 - Local Docker Compose is running PostgreSQL, backend, and frontend. Backend health returned `{"status":"ok"}`, `/login` returned HTTP 200, and the Gemini text smoke test passed without creating a transaction.
 - The browser displays the login form and the database contains one owner. Browser sign-in and ledger journeys remain unverified because the owner's password is not available in this task.
+- Frontend image validation now matches the backend's 4,000,000-byte limit; chat history load failures are shown in the conversation, and image preview URLs are revoked when replaced, removed, or unmounted.
