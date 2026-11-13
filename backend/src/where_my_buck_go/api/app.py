@@ -32,6 +32,10 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 4_100_000
     is_production = production if production is not None else os.environ.get("APP_ENV") == "production"
+    if is_production:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)  # type: ignore[method-assign]
     cookie_name = "__Host-wmbg_session" if is_production else "wmbg_session"
     csrf_cookie_name = "__Host-wmbg_csrf" if is_production else "wmbg_csrf"
     if service is None:
