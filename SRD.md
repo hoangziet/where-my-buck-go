@@ -1,89 +1,41 @@
-Rebuild Where My Buck Go: AI-powered personal finance assistant (Telegram + web), từ đầu, sạch —
-dùng repo cũ chỉ để tham khảo ý tưởng tính năng, KHÔNG migrate code hay data SQLite cũ.
+# Product and Architecture Requirements
 
-## Sản phẩm
-- Trợ lý tài chính cá nhân qua web trước, Telegram ở milestone riêng sau bản web. Web UI có VI/EN; trích xuất giao dịch
-  ưu tiên tiếng Việt, bảo toàn.
-- Dùng cho 1 owner trước, nhưng thiết kế ranh giới user/bot để mở rộng nhiều user/bot sau.
-- Giữ và cải thiện: chat nhiều lượt trên web (text kèm ảnh) cho nhập liệu, hỏi báo cáo,
-  tìm kiếm và yêu cầu CRUD; thu/chi, chụp hoá đơn, lịch sử, báo cáo, export CSV từ báo cáo
-  đã lọc, sửa, xoá, undo, dashboard web. Không import CSV.
-- KHÔNG làm trong v1: đồng bộ ngân hàng, nhiều wallet, giao dịch lặp định kỳ, budget.
+## Product
 
-## Stack đã chốt
-- Backend: Python + Flask, business logic tách khỏi route/SQL (domain/ riêng).
-- Web: React + TypeScript + Vite, build tĩnh, serve cùng origin với API (1 image Docker).
-- DB: PostgreSQL, Alembic migration có version, money là Decimal + currency code
-  (không dùng float), ràng buộc unique cho idempotency.
-- AI: Gemini API (`GEMINI_API_KEY`; structured output/function calling có schema và validate
-  tất định phía backend) cho chat Q&A, phân loại intent, và trích xuất hoá đơn ảnh.
-  KHÔNG dùng Anthropic hay Azure AI Foundry.
-- Hàng đợi: không dùng Service Bus — 1 worker process poll outbox table trực tiếp mỗi vài
-  giây, idempotent theo unique constraint.
-- Evidence storage (ảnh hoá đơn, text gốc): Cloudflare R2 (production), filesystem
-  adapter cho local dev. Production bắt buộc R2, không cho phép filesystem.
-- Deploy: Oracle Cloud "Always Free" VM, docker compose (Postgres + API + worker trong
-  cùng VM), image build & deploy qua GitHub Actions (workflow_dispatch, build → push GHCR
-  → SSH deploy → alembic upgrade head → health check). Không dùng Azure resource nào.
+Where My Buck Go is a personal finance assistant for one owner. The web app supports chat-based income and expense entry, receipt image intake, financial questions, transaction history, reports, CSV export, edits, soft deletes, and undo. There is no public registration. Banking sync, multiple wallets, recurring transactions, budgets, and CSV import are out of scope for v1.
 
-## Ranh giới kiến trúc bắt buộc
-- backend/src/where_my_buck_go/api/: route, validate request, session auth — KHÔNG chứa business/SQL logic.
-- backend/src/where_my_buck_go/domain/: rule nghiệp vụ (money, transaction time, text/image validation,
-  confirm, undo, report) độc lập Flask/SDK ngoài.
-- backend/src/where_my_buck_go/services/: use case, orchestration, chat coordinator.
-- backend/src/where_my_buck_go/adapters/: Postgres repo, Telegram, Gemini, R2 — implementation cụ thể.
-- Chat coordinator điều hướng 2 specialist: Q&A (chỉ đọc, nhận dữ liệu đã lọc theo owner +
-  lịch sử hội thoại bounded) và transaction intake (LLM trích xuất ngữ nghĩa tiếng Việt,
-  domain kiểm tra tất định và tạo DRAFT). Yêu cầu tra cứu linh hoạt được chuẩn hoá thành
-  truy vấn có cấu trúc; model không viết/chạy SQL trực tiếp.
-  KHÔNG specialist nào được confirm/viết transaction trực tiếp — chỉ route confirm có
-  version-check mới được viết. Input mơ hồ → mặc định về Q&A.
+The web app is the first delivery channel. Telegram is a possible later milestone and is not required for the web release.
 
-## Quy tắc nghiệp vụ bắt buộc (không thương lượng)
-- Mọi tạo/sửa/xoá transaction cần preview + xác nhận rõ ràng (confirm riêng, không tự suy
-  ra từ preview). Idempotency-Key UUID + expectedVersion cho mọi write; replay trả lại kết
-  quả cũ, key trùng nhưng payload khác → 409.
-- V1 chỉ chấp nhận VND (vẫn lưu currency code), timezone mặc định Asia/Ho_Chi_Minh. Tiền là Decimal chính xác,
-  không round ngầm.
-- Giao dịch từ text hoặc ảnh cần có ngày và giờ chính xác trước khi confirm. Nếu thiếu
-  ngày thì hỏi lại, không suy ngày từ thời điểm gửi/upload/worker chạy. "Hôm nay/hôm qua"
-  được giải nghĩa theo Asia/Ho_Chi_Minh tại lúc nhận yêu cầu. Nếu thiếu giờ, dùng mặc định
-  theo buổi: sáng 07:00, trưa 11:00, chiều 15:00, tối 20:00; không rõ buổi thì 07:00.
-  Preview phải nêu rõ giờ mặc định và cho sửa. Nếu có giờ rõ ràng, giữ nguyên giờ và suy ra buổi.
-  Khung buổi: sáng 05:00–10:59, trưa 11:00–13:59, chiều 14:00–17:59, tối 18:00–04:59.
-- 1 message liệt kê nhiều khoản → nhiều proposal riêng, xác nhận độc lập, khoản thiếu
-  thông tin vẫn ở draft.
-- 1 ảnh hoá đơn → 1 transaction theo tổng hoá đơn (không tách từng dòng), giữ ảnh gốc làm
-  evidence, xem được trong web UI.
-- Caption text có thể đi kèm ảnh để bổ sung ngữ cảnh. Khi caption và hoá đơn mâu thuẫn,
-  hỏi người dùng trước khi confirm. Nhiều ảnh cùng một hoá đơn có thể gộp nếu rõ ràng;
-  nếu không rõ thì hỏi lại. Mỗi hoá đơn riêng tạo một proposal.
-- Evidence (text gốc, ảnh) luôn gắn với transaction/draft để user xem lại được.
-- Mọi input từ model/Telegram/ảnh là untrusted — validate trước khi hành động nghiệp
-  vụ; không bao giờ cho model chạy SQL trực tiếp.
-- Webhook/retry phải idempotent (không giả định delivery exactly-once).
-- Không log secret hay nội dung tài chính thô.
-- Sửa/xoá/undo qua chat đều cần preview và confirm riêng; khi có nhiều giao dịch phù hợp,
-  yêu cầu chọn cụ thể. Xoá mềm; undo là thay đổi được xác nhận, không xoá lịch sử.
+## Current Architecture
 
-## Auth
-- Username/password only, không SSO/Entra, không self-register công khai (chỉ owner
-  bootstrap qua CLI 1 lần).
-- Argon2id hash, session bearer token 256-bit random trong cookie HttpOnly+SameSite=Strict
-  (__Host- prefix khi production), hết hạn 12h, revoke được server-side.
-- CSRF token bắt buộc cho mọi POST/PUT/PATCH/DELETE có session.
-- Rate-limit đăng nhập 10 lần/15 phút/địa chỉ (lưu HMAC digest, không lưu IP thô).
-- user_id lấy từ session, không bao giờ tin user_id từ request body.
+- Backend: Python, Flask, SQLAlchemy, and PostgreSQL with versioned Alembic migrations.
+- Frontend: Next.js, React, and TypeScript. The frontend and backend run as separate services in local Docker Compose; the Next.js frontend proxies API requests to the backend.
+- AI: Gemini structured function calls for chat routing and receipt extraction. The backend validates model output; the model cannot execute SQL or confirm ledger changes.
+- Evidence: private filesystem storage in local development. Production startup rejects filesystem evidence storage; an R2 adapter is not implemented yet.
+- Deployment: local Docker Compose is supported. Production deployment and a background worker are future work; there is no outbox worker currently.
 
-## Code quality
-- Module nhỏ, gọn, tên rõ nghĩa; file ≤1000 dòng, dòng ≤120 ký tự, hàm ≤50 dòng nghĩa.
-- Python type hints đầy đủ cho public API, TypeScript strict, không `any`/cast ngầm/catch
-  nuốt lỗi/fake success.
-- Test cho money, date/time, confirm, undo, retry, permission. Lint/type/test/build chạy
-  trước khi báo xong.
+Backend responsibilities are separated into `api/` (HTTP, auth, validation), `domain/` (business rules), `services/` (use cases), and `adapters/` (database, Gemini, and evidence integrations). The owner identity comes from the authenticated session, never from request data.
 
-Triển khai theo milestone: auth → domain money/time → draft/confirm → chat web → ảnh trong
-chat → web UI/báo cáo/export CSV → deploy Oracle → Telegram. Xác nhận với owner trước khi
-code từng milestone; Telegram không chặn bản web đầu tiên. Ưu tiên kiểm thử đầy đủ trên
-local (PostgreSQL local, filesystem evidence adapter local) trước khi bắt đầu bất kỳ deploy
-nào; chỉ triển khai Oracle sau khi owner xác nhận bản local đạt yêu cầu.
+## Ledger Rules
+
+- Every create, edit, delete, and undo operation starts as a preview. It changes the ledger only after a separate explicit confirmation.
+- Writes use a UUID `Idempotency-Key` and an expected version. Replaying the same key and payload returns the original result; reusing a key with a different payload returns a conflict.
+- V1 stores VND amounts as exact decimal values and uses `Asia/Ho_Chi_Minh` for local dates and times.
+- A transaction needs a date and amount before confirmation. Missing dates are not inferred from upload or processing time. Missing times use a visible, editable default based on the stated period.
+- One text message can produce multiple independent proposals. Each proposal requires its own confirmation.
+- Each image intake request accepts one PNG or JPEG image and creates one proposal for the receipt total, preserving the original image as evidence. Multiple images are not supported in a single request. An optional caption may clarify merchant or category; receipt amount, date, and time take precedence over caption values.
+- Evidence remains associated with its draft and confirmed transaction and can be viewed in the web app.
+- Edits, soft deletes, and undo require a preview and explicit confirmation. Chat requests matching multiple transactions require the owner to select one.
+
+## Authentication and Security
+
+- Authentication uses an owner-created username and password; there is no public sign-up or SSO.
+- Passwords use Argon2id. Server-side sessions expire after 12 hours and can be revoked. Production cookies use the `__Host-` prefix, `HttpOnly`, and `SameSite=Strict`.
+- Mutating authenticated requests require a CSRF token. Login attempts are rate-limited using an HMAC digest of the client address.
+- Treat chat, captions, receipt contents, and model responses as untrusted input. Validate all data before applying business rules. Never log secrets or raw financial content.
+
+## Quality and Roadmap
+
+Keep modules cohesive, public Python APIs typed, and TypeScript strict. Cover money, date/time, authorization, idempotency, and draft-confirm behavior with tests. Run the backend tests, Ruff, mypy, frontend lint, and frontend build before reporting a code change as complete.
+
+Implemented local capabilities include authentication, draft/confirm ledger flows, chat, single-image intake, reports, evidence viewing, CSV export, and Docker Compose. Remaining work includes reliable client retries using the original idempotency key, production R2 storage, production deployment, and any later Telegram integration. Production deployment must wait until the owner approves the local app.
