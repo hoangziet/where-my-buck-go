@@ -66,6 +66,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   const [pendingImage, setPendingImage] = useState<File | null>(null);
   const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
   const ownedChatId = useRef<string | undefined | null>(null);
   const retryRequest = useRef<ChatRetry | null>(null);
   const proposalIdempotencyKeys = useRef(new Map<string, string>());
@@ -356,7 +357,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
       </header>
 
       <div className="flex-1 px-4 lg:px-8 pb-40 lg:pb-8 flex flex-col">
-        <div className="w-full max-w-[860px] mx-auto flex flex-col gap-7">
+        <div role="log" aria-live="polite" className="w-full max-w-[860px] mx-auto flex flex-col gap-7">
           <div className="hidden lg:flex flex-wrap items-center justify-between gap-3 py-5.5 border-b border-border-nav">
             <h1 className="m-0 text-[17px] font-semibold">AI Chat</h1>
             <button
@@ -522,6 +523,18 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
                     e.target.value = "";
                   }}
                 />
+                <input
+                  ref={cameraInput}
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) stageImage(file);
+                    e.target.value = "";
+                  }}
+                />
                 <button
                   type="button"
                   aria-label="Attach image"
@@ -533,7 +546,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
                 <button
                   type="button"
                   aria-label="Take a photo"
-                  onClick={() => fileInput.current?.click()}
+                  onClick={() => cameraInput.current?.click()}
                   className="w-10 h-10 rounded-[10px] border-0 bg-transparent text-ink-3 flex items-center justify-center cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC] hover:text-ink"
                 >
                   <Camera size={20} strokeWidth={1.9} />
