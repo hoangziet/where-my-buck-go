@@ -124,6 +124,33 @@ jobs:
           backend_container="$(docker compose -f compose.local.yml ps -aq backend)"
           docker cp "$restore_dir/evidence/." "$backend_container:/data/evidence/"
           docker compose -f compose.local.yml up -d --wait --wait-timeout 120 frontend
+      - name: Verify restored evidence against database digests
+        run: |
+          docker compose -f compose.local.yml exec -T backend python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          from sqlalchemy import create_engine, text
+
+          engine = create_engine(os.environ["DATABASE_URL"])
+          try:
+              with engine.connect() as connection:
+                  rows = connection.execute(
+                      text("SELECT storage_key, sha256_digest FROM evidence")
+                  ).mappings().all()
+              if not rows:
+                  raise RuntimeError("Restored database has no evidence rows")
+              for row in rows:
+                  path = Path("/data/evidence") / row["storage_key"]
+                  if not path.is_file():
+                      raise RuntimeError(f"Missing restored evidence file: {row['storage_key']}")
+                  digest = hashlib.sha256(path.read_bytes()).digest()
+                  if digest != bytes(row["sha256_digest"]):
+                      raise RuntimeError(f"Evidence checksum mismatch: {row['storage_key']}")
+              print(f"Verified {len(rows)} restored evidence files")
+          finally:
+              engine.dispose()
+          PY
       - name: Recheck authenticated owner journey after restore
         run: npx playwright test e2e/live-stack.spec.ts
         working-directory: frontend

@@ -49,6 +49,19 @@ test("real owner session persists a ledger entry through reports, export, deleti
   expect(proposal.status, JSON.stringify(proposal.body)).toBe(201);
 
   const proposalId = (proposal.body as { id: string }).id;
+  const proposalDetails = await page.evaluate(async (identifier) => {
+    const response = await fetch(`/api/proposals/${identifier}`);
+    return { status: response.status, body: await response.json() };
+  }, proposalId);
+  expect(proposalDetails.status).toBe(200);
+  const evidenceIds = (proposalDetails.body as { evidenceIds: string[] }).evidenceIds;
+  expect(evidenceIds).toHaveLength(1);
+  const evidence = await page.evaluate(async (identifier) => {
+    const response = await fetch(`/api/evidence/${identifier}`);
+    return { status: response.status, text: await response.text() };
+  }, evidenceIds[0]);
+  expect(evidence).toEqual({ status: 200, text: "Disposable CI-only test transaction" });
+
   const confirmation = await page.evaluate(async ({ csrf, identifier, idempotencyKey }) => {
     const response = await fetch(`/api/proposals/${identifier}/confirm`, {
       method: "POST",
