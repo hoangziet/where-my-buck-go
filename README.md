@@ -101,7 +101,12 @@ version-checked the same as confirm. `GET /api/proposals/<id>` and
 `GET /api/evidence/<id>`. `GET /api/proposals` lists up to 200 open owner drafts, including after a
 page reload. Every proposal requires original `evidenceText`. Missing date stays a
 draft; a missing time receives a marked default. Local evidence lives in private `.local-evidence/`.
-The app refuses to start with filesystem evidence in production until the R2 adapter is available.
+Production uses the S3-compatible Cloudflare R2 adapter. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+`R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME` in the deployment environment; startup fails if any are
+missing. Use a private bucket and a token scoped to that bucket. Evidence objects have UUID keys,
+retain database SHA-256 verification, and are never exposed through public bucket access. The adapter's
+contract is covered by isolated tests; a live R2 upload/restore rehearsal still requires deployment
+credentials and is not represented as verified here.
 
 `POST /api/chat/messages` accepts `{ "text": "...", "history": [], "expectedVersion": 0, "chatId": "..." }`
 (`chatId` optional; a new conversation is created and returned when omitted) with the same session,

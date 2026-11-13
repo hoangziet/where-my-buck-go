@@ -16,6 +16,7 @@ from where_my_buck_go.adapters.gemini import DEFAULT_MODEL, GeminiClient
 from where_my_buck_go.adapters.history_repo import PostgresHistoryStore
 from where_my_buck_go.adapters.ledger_repo import PostgresLedgerStore
 from where_my_buck_go.adapters.local_evidence import LocalEvidenceStore
+from where_my_buck_go.adapters.r2_evidence import R2EvidenceStore
 from where_my_buck_go.api.ledger import ledger_blueprint
 from where_my_buck_go.services.auth import AuthService, LoginLimitedError, SessionRecord
 from where_my_buck_go.services.chat import ChatService
@@ -41,8 +42,9 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
         engine = None
     if ledger is None and engine is not None:
         root = Path(__file__).resolve().parents[4]
-        directory = Path(os.environ.get("EVIDENCE_DIR", root / ".local-evidence"))
-        ledger = LedgerService(PostgresLedgerStore(engine), LocalEvidenceStore(directory, production=is_production))
+        evidence = (R2EvidenceStore.from_environment() if is_production else
+                    LocalEvidenceStore(Path(os.environ.get("EVIDENCE_DIR", root / ".local-evidence"))))
+        ledger = LedgerService(PostgresLedgerStore(engine), evidence)
     if history is None and engine is not None and ledger is not None:
         history = HistoryService(PostgresHistoryStore(engine), ledger.store)
     if ledger is not None:

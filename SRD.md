@@ -11,7 +11,7 @@ The web app is the first delivery channel. Telegram is a possible later mileston
 - Backend: Python, Flask, SQLAlchemy, and PostgreSQL with versioned Alembic migrations.
 - Frontend: Next.js, React, and TypeScript. The frontend and backend run as separate services in local Docker Compose; the Next.js frontend proxies API requests to the backend.
 - AI: Gemini structured function calls for chat routing and receipt extraction. The backend validates model output; the model cannot execute SQL or confirm ledger changes.
-- Evidence: private filesystem storage in local development. Production startup rejects filesystem evidence storage; an R2 adapter is not implemented yet.
+- Evidence: private filesystem storage in local development; an S3-compatible Cloudflare R2 adapter in production. Production startup fails fast if R2 configuration is missing.
 - Deployment: local Docker Compose is supported. Production deployment and a background worker are future work; there is no outbox worker currently.
 
 Backend responsibilities are separated into `api/` (HTTP, auth, validation), `domain/` (business rules), `services/` (use cases), and `adapters/` (database, Gemini, and evidence integrations). The owner identity comes from the authenticated session, never from request data.
@@ -38,4 +38,4 @@ Backend responsibilities are separated into `api/` (HTTP, auth, validation), `do
 
 Keep modules cohesive, public Python APIs typed, and TypeScript strict. Cover money, date/time, authorization, idempotency, and draft-confirm behavior with tests. Run the backend tests, Ruff, mypy, frontend lint, and frontend build before reporting a code change as complete.
 
-Implemented local capabilities include authentication, draft/confirm ledger flows, chat, single-image intake, reports, evidence viewing, CSV export, and Docker Compose. Remaining work includes reliable client retries using the original idempotency key, production R2 storage, production deployment, and any later Telegram integration. Production deployment must wait until the owner approves the local app.
+Implemented local capabilities include authentication, draft/confirm ledger flows, chat, single-image intake, reports, evidence viewing, CSV export, Docker Compose, and an S3-compatible production R2 evidence adapter. Remaining work includes a live R2 rehearsal, production deployment configuration, and any later Telegram integration. Production deployment must wait until the owner approves the local app.
