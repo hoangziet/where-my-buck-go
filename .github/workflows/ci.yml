@@ -54,3 +54,22 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+
+  docker-compose:
+    runs-on: ubuntu-latest
+    env:
+      AUTH_HMAC_KEY: ci-only-auth-key-with-at-least-thirty-two-bytes
+      GEMINI_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate Compose configuration
+        run: docker compose -f compose.local.yml config -q
+      - name: Build and start the local stack
+        run: docker compose -f compose.local.yml up -d --build --wait --wait-timeout 180
+      - name: Verify backend and frontend routes
+        run: |
+          curl --fail --silent --show-error http://localhost:5000/api/health | grep -Fx '{"status":"ok"}'
+          curl --fail --silent --show-error --output /dev/null http://localhost:3100/login
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f compose.local.yml down
