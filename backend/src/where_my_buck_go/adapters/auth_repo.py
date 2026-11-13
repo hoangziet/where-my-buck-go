@@ -56,6 +56,10 @@ class PostgresAuthStore(AuthStore):
         with self.engine.begin() as conn:
             conn.execute(insert(sessions).values(id=str(uuid4()), user_id=user_id, token_digest=token_digest,
                                                  csrf_digest=csrf_digest, expires_at=expiry))
+            # Sessions are only ever soft-revoked or left to expire, never deleted; prune anything
+            # already past its own expiry (using the database's clock, not the new row's future
+            # expires_at) so the table doesn't grow forever. Mirrors reserve_login's pruning.
+            conn.execute(delete(sessions).where(sessions.c.expires_at < func.now()))
 
     def find_session(self, token_digest: bytes, now: datetime) -> SessionRecord | None:
         with self.engine.connect() as conn:

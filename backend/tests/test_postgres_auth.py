@@ -1,14 +1,15 @@
 """Optional live-PostgreSQL contract: uses an isolated temporary schema."""
 
 import os
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, insert, text
 
 from where_my_buck_go.adapters.auth_repo import PostgresAuthStore
-from where_my_buck_go.adapters.db import metadata
-from where_my_buck_go.services.auth import AuthService, LoginLimitedError
+from where_my_buck_go.adapters.db import metadata, sessions
+from where_my_buck_go.services.auth import AuthService, LoginLimitedError, digest_secret
 
 
 @pytest.mark.skipif(not os.environ.get("TEST_DATABASE_URL"), reason="Set TEST_DATABASE_URL for live PostgreSQL tests")
@@ -47,6 +48,40 @@ def test_postgres_owner_sessions_and_rate_limit() -> None:
             assert service.login("unknown", "bad", "192.0.2.9") is None
         with pytest.raises(LoginLimitedError):
             service.login("owner", "long-owner-password-123", "192.0.2.9")
+    finally:
+        engine.dispose()
+        with admin.begin() as conn:
+            conn.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        admin.dispose()
+
+
+@pytest.mark.skipif(not os.environ.get("TEST_DATABASE_URL"), reason="Set TEST_DATABASE_URL for live PostgreSQL tests")
+def test_postgres_create_session_prunes_expired_rows() -> None:
+    url = os.environ["TEST_DATABASE_URL"]
+    schema = "wmbg_test_" + uuid4().hex
+    admin = create_engine(url)
+    with admin.begin() as conn:
+        conn.execute(text(f'CREATE SCHEMA "{schema}"'))
+    engine = create_engine(url, connect_args={"options": f"-csearch_path={schema}"})
+    try:
+        metadata.create_all(engine)
+        service = AuthService(PostgresAuthStore(engine), b"integration-key-at-least-32-bytes-long")
+        assert service.bootstrap("owner", "long-owner-password-123")
+        now = datetime.now(timezone.utc)
+        with engine.connect() as conn:
+            owner_id = conn.execute(text("SELECT id FROM users WHERE username = 'owner'")).scalar_one()
+        # A long-expired row with no logout ever called (revoked_at stays NULL forever) — the
+        # case the earlier revoked_at-only pruning attempt missed.
+        with engine.begin() as conn:
+            conn.execute(insert(sessions).values(
+                id=str(uuid4()), user_id=owner_id, token_digest=digest_secret("stale-token"),
+                csrf_digest=digest_secret("stale-csrf"), expires_at=now - timedelta(days=1),
+            ))
+        still_valid = service.login("owner", "long-owner-password-123", "192.0.2.20")
+        assert still_valid is not None
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT count(*) FROM sessions")).scalar_one() == 1
+        assert service.session(still_valid.token) is not None
     finally:
         engine.dispose()
         with admin.begin() as conn:
