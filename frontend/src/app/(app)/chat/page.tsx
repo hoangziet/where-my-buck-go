@@ -28,7 +28,14 @@ type AssistantMessage = (
 
 type Message = { role: "user"; text: string; imagePreviewUrl?: string } | AssistantMessage;
 
-type ConfirmState = Record<string, { transactionId: string } | "discarded" | "error" | "pending">;
+type ChatRetry =
+  | { kind: "text"; text: string; history: ChatHistoryItem[]; chatId?: string; idempotencyKey: string }
+  | { kind: "image"; file: File; caption: string; idempotencyKey: string };
+
+type ConfirmState = Record<
+  string,
+  { transactionId: string } | "discarded" | "error" | "pending" | "discarding" | "discard_error"
+>;
 
 export default function ChatPage() {
   return (
@@ -58,6 +65,17 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const ownedChatId = useRef<string | undefined | null>(null);
+  const retryRequest = useRef<ChatRetry | null>(null);
+  const proposalIdempotencyKeys = useRef(new Map<string, string>());
+
+  function proposalActionKey(action: "confirm" | "discard", proposalId: string): string {
+    const key = `${action}:${proposalId}`;
+    const existing = proposalIdempotencyKeys.current.get(key);
+    if (existing) return existing;
+    const created = crypto.randomUUID();
+    proposalIdempotencyKeys.current.set(key, created);
+    return created;
+  }
 
   useEffect(() => {
     if (urlChatId === ownedChatId.current) return;
@@ -118,11 +136,19 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
       await sendImage(pendingImage, text);
       return;
     }
+    const previousRetry = retryRequest.current;
+    const request = previousRetry?.kind === "text"
+      && previousRetry.text === text
+      && previousRetry.chatId === chatId
+      && JSON.stringify(previousRetry.history) === JSON.stringify(history)
+      ? previousRetry
+      : { kind: "text" as const, text, history, chatId, idempotencyKey: crypto.randomUUID() };
+    const isRetry = request === previousRetry;
+    if (!isRetry) setMessages((prev) => [...prev, { role: "user", text }]);
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", text }]);
     setSending(true);
     try {
-      const res = await api.sendChatMessage(text, history, chatId);
+      const res = await api.sendChatMessage(text, request.history, request.chatId, request.idempotencyKey);
       if (res.chatId && res.chatId !== chatId) {
         setChatId(res.chatId);
         ownedChatId.current = res.chatId;
@@ -148,11 +174,16 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
       assistant = { ...assistant, debugTrace: res.debugTrace };
       setMessages((prev) => [...prev, assistant]);
       pushHistory(text, historyText);
+      retryRequest.current = null;
     } catch (err) {
+      retryRequest.current = request;
+      setInput(text);
       const text2 = err instanceof Error ? err.message : "Something went wrong";
       const debugTrace = err instanceof api.ApiError && Array.isArray(err.payload?.debugTrace)
         ? err.payload.debugTrace as TraceEntry[] : undefined;
-      setMessages((prev) => [...prev, { role: "assistant", kind: "error", text: text2, debugTrace }]);
+      setMessages((prev) => [...prev, {
+        role: "assistant", kind: "error", text: `${text2} Your message is back in the composer; resend to retry safely.`, debugTrace,
+      }]);
     } finally {
       setSending(false);
     }
@@ -174,22 +205,36 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
 
   async function sendImage(file: File, caption: string) {
     const previewUrl = pendingImageUrl ?? URL.createObjectURL(file);
+    const previousRetry = retryRequest.current;
+    const request = previousRetry?.kind === "image"
+      && previousRetry.file === file
+      && previousRetry.caption === caption
+      ? previousRetry
+      : { kind: "image" as const, file, caption, idempotencyKey: crypto.randomUUID() };
+    const isRetry = request === previousRetry;
     setInput("");
     setPendingImage(null);
     setPendingImageUrl(null);
-    setMessages((prev) => [...prev, { role: "user", text: caption, imagePreviewUrl: previewUrl }]);
+    if (!isRetry) setMessages((prev) => [...prev, { role: "user", text: caption, imagePreviewUrl: previewUrl }]);
     setSending(true);
     try {
-      const res = await api.imageIntake(file, caption || undefined);
+      const res = await api.imageIntake(file, caption || undefined, request.idempotencyKey);
       setMessages((prev) => [...prev, {
         role: "assistant", kind: "image_intake", text: res.message, proposal: res.proposal,
         debugTrace: res.debugTrace,
       }]);
+      retryRequest.current = null;
     } catch (err) {
+      retryRequest.current = request;
+      setInput(caption);
+      setPendingImage(file);
+      setPendingImageUrl(previewUrl);
       const text = err instanceof Error ? err.message : "Could not read that image";
       const debugTrace = err instanceof api.ApiError && Array.isArray(err.payload?.debugTrace)
         ? err.payload.debugTrace as TraceEntry[] : undefined;
-      setMessages((prev) => [...prev, { role: "assistant", kind: "error", text, debugTrace }]);
+      setMessages((prev) => [...prev, {
+        role: "assistant", kind: "error", text: `${text} The image is back in the composer; resend to retry safely.`, debugTrace,
+      }]);
     } finally {
       setSending(false);
     }
@@ -209,20 +254,28 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
     if (existing && existing !== "error") return;
     setConfirmState((prev) => ({ ...prev, [proposal.id]: "pending" }));
     try {
-      const { transaction } = await api.confirmProposal(proposal.id, proposal.version);
+      const { transaction } = await api.confirmProposal(
+        proposal.id, proposal.version, proposalActionKey("confirm", proposal.id),
+      );
       setConfirmState((prev) => ({ ...prev, [proposal.id]: { transactionId: transaction.id } }));
+      proposalIdempotencyKeys.current.delete(`confirm:${proposal.id}`);
     } catch {
       setConfirmState((prev) => ({ ...prev, [proposal.id]: "error" }));
     }
   }
 
   async function handleDiscard(proposal: ProposalDto) {
-    if (confirmState[proposal.id]) return;
-    setConfirmState((prev) => ({ ...prev, [proposal.id]: "discarded" }));
+    const current = confirmState[proposal.id];
+    if (current && current !== "discard_error") return;
+    setConfirmState((prev) => ({ ...prev, [proposal.id]: "discarding" }));
     try {
-      await api.discardProposal(proposal.id, proposal.version);
+      await api.discardProposal(
+        proposal.id, proposal.version, proposalActionKey("discard", proposal.id),
+      );
+      setConfirmState((prev) => ({ ...prev, [proposal.id]: "discarded" }));
+      proposalIdempotencyKeys.current.delete(`discard:${proposal.id}`);
     } catch {
-      /* best-effort cleanup; the draft stays hidden locally even if the backend call failed */
+      setConfirmState((prev) => ({ ...prev, [proposal.id]: "discard_error" }));
     }
   }
 
@@ -618,6 +671,7 @@ function ProposalCard({
           <p className="m-0 text-sm text-muted">Missing date — ask a follow-up to add it before confirming.</p>
         )}
         {state === "pending" && <p className="m-0 text-sm text-muted">Confirming…</p>}
+        {state === "discarding" && <p className="m-0 text-sm text-muted">Discarding…</p>}
         {state === "discarded" && <p className="m-0 text-sm text-muted">Discarded</p>}
         {state === "error" && (
           <div className="flex flex-wrap items-center gap-2">
@@ -626,6 +680,18 @@ function ProposalCard({
               type="button"
               onClick={onConfirm}
               className="font-semibold text-sm bg-accent text-white border-0 rounded-[10px] px-4 min-h-11 cursor-pointer transition-colors duration-150 hover:bg-accent-strong"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+        {state === "discard_error" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <p role="alert" className="m-0 text-sm text-danger">Could not discard this draft.</p>
+            <button
+              type="button"
+              onClick={onDiscard}
+              className="font-semibold text-sm bg-surface border border-border-input rounded-[10px] px-4 min-h-11 cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC]"
             >
               Try again
             </button>

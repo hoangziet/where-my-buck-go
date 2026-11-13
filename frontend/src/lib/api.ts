@@ -25,14 +25,14 @@ export function setSessionExpiredHandler(handler: (() => void) | null): void {
 
 async function request<T>(
   path: string,
-  options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+  options: { method?: string; body?: unknown; headers?: Record<string, string>; idempotencyKey?: string } = {},
 ): Promise<T> {
   const method = options.method ?? "GET";
   const headers: Record<string, string> = { ...options.headers };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET") {
     headers["X-CSRF-Token"] = csrfToken();
-    headers["Idempotency-Key"] = crypto.randomUUID();
+    headers["Idempotency-Key"] = options.idempotencyKey ?? crypto.randomUUID();
   }
   let res: Response;
   try {
@@ -179,12 +179,21 @@ export function proposeChange(
 export function confirmProposal(
   id: string,
   expectedVersion: number,
+  idempotencyKey?: string,
 ): Promise<{ proposal: ProposalDto; transaction: TransactionDto }> {
-  return request(`/api/proposals/${id}/confirm`, { method: "POST", body: { expectedVersion } });
+  return request(`/api/proposals/${id}/confirm`, {
+    method: "POST", body: { expectedVersion }, idempotencyKey,
+  });
 }
 
-export function discardProposal(id: string, expectedVersion: number): Promise<{ proposal: ProposalDto }> {
-  return request(`/api/proposals/${id}/discard`, { method: "POST", body: { expectedVersion } });
+export function discardProposal(
+  id: string,
+  expectedVersion: number,
+  idempotencyKey?: string,
+): Promise<{ proposal: ProposalDto }> {
+  return request(`/api/proposals/${id}/discard`, {
+    method: "POST", body: { expectedVersion }, idempotencyKey,
+  });
 }
 
 export interface ReportsSummary {
@@ -227,9 +236,11 @@ export function sendChatMessage(
   text: string,
   history: ChatHistoryItem[],
   chatId?: string,
+  idempotencyKey?: string,
 ): Promise<ChatResponse> {
   return request("/api/chat/messages", {
     method: "POST",
+    idempotencyKey,
     body: { text, history, expectedVersion: 0, ...(chatId ? { chatId } : {}) },
   });
 }
@@ -282,7 +293,7 @@ export interface ImageIntakeResponse {
   debugTrace?: TraceEntry[];
 }
 
-export async function imageIntake(file: File, caption?: string): Promise<ImageIntakeResponse> {
+export async function imageIntake(file: File, caption?: string, idempotencyKey?: string): Promise<ImageIntakeResponse> {
   const form = new FormData();
   form.append("image", file);
   if (caption) form.append("caption", caption);
@@ -291,7 +302,10 @@ export async function imageIntake(file: File, caption?: string): Promise<ImageIn
     res = await fetch("/api/chat/image-intake", {
       method: "POST",
       credentials: "include",
-      headers: { "X-CSRF-Token": csrfToken(), "Idempotency-Key": crypto.randomUUID() },
+      headers: {
+        "X-CSRF-Token": csrfToken(),
+        "Idempotency-Key": idempotencyKey ?? crypto.randomUUID(),
+      },
       body: form,
     });
   } catch {
