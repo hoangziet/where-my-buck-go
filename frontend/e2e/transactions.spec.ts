@@ -126,6 +126,47 @@ test("edit creates a preview and waits for explicit confirmation", async ({ page
   expect(confirmRequests).toBe(1);
 });
 
+test("a stale version conflict on confirm refreshes the list instead of applying blindly", async ({ page }) => {
+  let transactionsRequests = 0;
+
+  await openTransactions(page);
+  await page.route("**/api/transactions", async (route) => {
+    transactionsRequests += 1;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [{ ...original, amount: "99000", description: "Coffee (edited on another device)" }],
+      }),
+    });
+  });
+  await page.route("**/api/proposals/changes", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(proposal("edit", { amount: "20000", description: "Coffee and pastry" })),
+    });
+  });
+  await page.route("**/api/proposals/proposal-edit/confirm", async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Version conflict" }),
+    });
+  });
+
+  await page.getByRole("button", { name: "Edit transaction" }).click();
+  await page.getByLabel("Description").fill("Coffee and pastry");
+  await page.getByLabel("Amount (VND)").fill("20000");
+  await page.getByRole("button", { name: "Review changes" }).click();
+  await expect(page.getByRole("dialog", { name: "Review transaction changes" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Confirm edit" }).click();
+
+  await expect(page.getByText("This transaction changed elsewhere. The list has been refreshed — please try again.")).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("row", { name: /Coffee \(edited on another device\)/ })).toBeVisible();
+  expect(transactionsRequests).toBe(1);
+});
+
 test("delete and undo each require their own explicit confirmation", async ({ page }) => {
   let confirmRequests = 0;
   const confirmOperation: string[] = [];
