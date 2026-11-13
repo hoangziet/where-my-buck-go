@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 const original = {
   id: "transaction-test-1",
@@ -40,19 +41,52 @@ function proposal(operation: "edit" | "delete" | "undo", overrides: Record<strin
   };
 }
 
-async function openTransactions(page: import("@playwright/test").Page) {
+async function openTransactions(
+  page: import("@playwright/test").Page,
+  transactions: Record<string, unknown>[] = [original],
+) {
   await page.route("**/api/auth/me", (route) => route.fulfill({
     contentType: "application/json",
     body: JSON.stringify({ username: "owner" }),
   }));
   await page.route("**/api/transactions", (route) => route.fulfill({
     contentType: "application/json",
-    body: JSON.stringify({ items: [original] }),
+    body: JSON.stringify({ items: transactions }),
   }));
   await page.goto("/transactions");
   await expect(page.getByRole("heading", { name: "Transactions" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Coffee/ })).toBeVisible();
 }
+
+test("type and category filters scope the CSV export and formula-like text stays inert", async ({ page }) => {
+  const formulaText = { ...original, id: "transaction-formula", description: "=SUM(1,1)" };
+  const income = {
+    ...original,
+    id: "transaction-income",
+    direction: "income",
+    amount: "5000000",
+    description: "Salary",
+    category: "income",
+  };
+
+  await openTransactions(page, [original, formulaText, income]);
+  await page.getByRole("button", { name: "Expenses" }).last().click();
+  await page.getByRole("combobox", { name: "Category" }).last().selectOption("food_drink");
+  await expect(page.getByText("2 transactions", { exact: true })).toBeVisible();
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Export CSV" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^transactions-\d{4}-\d{2}-\d{2}\.csv$/);
+  const path = await download.path();
+  if (!path) throw new Error("CSV download did not produce a file");
+  const csv = await readFile(path, "utf8");
+
+  expect(csv).toContain("Coffee");
+  expect(csv).toContain('"\t=SUM(1,1)"');
+  expect(csv).not.toContain("Salary");
+});
 
 test("edit creates a preview and waits for explicit confirmation", async ({ page }) => {
   let confirmRequests = 0;
