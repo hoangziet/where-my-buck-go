@@ -78,6 +78,58 @@ test("text intake shows a draft and discard never confirms it", async ({ page })
   expect(confirmRequests).toBe(0);
 });
 
+test("confirm retry reuses its idempotency key after a temporary failure", async ({ page }) => {
+  const confirmKeys: string[] = [];
+
+  await openChat(page);
+  await page.route("**/api/chat/messages", (route) => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({ kind: "intake", message: "Draft ready.", proposals: [proposal], errors: [] }),
+  }));
+  await page.route("**/api/proposals/proposal-test-1/confirm", async (route) => {
+    confirmKeys.push(route.request().headers()["idempotency-key"]);
+    if (confirmKeys.length === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Temporary server failure" }),
+      });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        proposal: { ...proposal, state: "confirmed", confirmedTransactionId: "transaction-test-1" },
+        transaction: {
+          id: "transaction-test-1",
+          version: 1,
+          deleted: false,
+          amount: "1000",
+          currency: "VND",
+          direction: "expense",
+          description: "coffee",
+          category: "food_drink",
+          occurredDate: "2026-11-13",
+          occurredTime: "07:00",
+          period: "morning",
+          timeSource: "default",
+        },
+      }),
+    });
+  });
+
+  await page.getByRole("textbox", { name: "Message" }).fill("I spent 1,000 VND on coffee");
+  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByText("Could not confirm.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+
+  expect(confirmKeys).toHaveLength(2);
+  expect(confirmKeys[0]).toBeTruthy();
+  expect(confirmKeys[1]).toBe(confirmKeys[0]);
+});
+
 test("pasted image stays in composer until sent with its caption", async ({ page }) => {
   let imageRequestBody = "";
   let imageRequestKey = "";
