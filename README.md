@@ -58,6 +58,41 @@ Verify health checks and owner data after restore. Database replacement is destr
 and keep the source backup untouched. Rehearse restores with an isolated Compose project before relying on
 a backup for recovery.
 
+## Production deployment with Docker Compose
+
+Production deployment uses `compose.prod.yml` and targets a single host behind a TLS reverse proxy
+(such as Caddy or Nginx). Production requires an explicit, random `POSTGRES_PASSWORD`, `AUTH_HMAC_KEY`,
+and Cloudflare R2 credentials for evidence storage:
+
+```sh
+# Required environment variables in .env or systemd unit:
+POSTGRES_PASSWORD=your-secure-postgres-password
+AUTH_HMAC_KEY=your-random-hmac-key-at-least-32-bytes
+R2_ACCOUNT_ID=your-cloudflare-account-id
+R2_ACCESS_KEY_ID=your-r2-access-key-id
+R2_SECRET_ACCESS_KEY=your-r2-secret-access-key
+R2_BUCKET_NAME=your-r2-bucket-name
+GEMINI_API_KEY=your-gemini-api-key # optional
+```
+
+Start the production stack with:
+
+```sh
+docker compose -f compose.prod.yml up -d --build
+```
+
+The production stack:
+- Uses `APP_ENV=production` with secure cookies (`__Host-` prefix, `HttpOnly`, `SameSite=Strict`, `Secure`), HSTS headers, and `ProxyFix` middleware.
+- Stores evidence in private Cloudflare R2 instead of the local filesystem.
+- Sets memory limits (512MB per container), log rotation (`json-file` with 10MB x 3 files max), and `restart: unless-stopped`.
+- Binds frontend only to `127.0.0.1:3000` for reverse proxy termination. Backend and database ports are not published to the host.
+- Migrates the database automatically before backend launch via a one-shot `migrate` service.
+
+On initial production launch, create the owner account with:
+`docker compose -f compose.prod.yml exec backend wmbg-bootstrap owner`
+
+Deploy only after local acceptance and explicit owner approval.
+
 ## Run services on the host
 
 For host-based development, use Python 3.10+, Node 20+, and Docker. Start only PostgreSQL with
