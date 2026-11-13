@@ -4,7 +4,6 @@ import re
 from dataclasses import dataclass
 from datetime import date, time
 from decimal import Decimal
-from typing import cast
 
 from where_my_buck_go.domain.ledger import CATEGORIES, Category
 from where_my_buck_go.domain.money import InvalidMoney, Money
@@ -38,7 +37,7 @@ def validate_image_preview(args: dict[str, object]) -> ImagePreview:
         raise InvalidImagePreview("Payment direction is not an expense")
     if args["category"] not in CATEGORIES:
         raise InvalidImagePreview("Category must be one of " + ", ".join(CATEGORIES))
-    category = cast(Category, args["category"])
+    category: Category = args["category"]
     amount, day, clock, description = (args[key] for key in
                                        ("amount", "occurred_date", "occurred_time", "description"))
     try:

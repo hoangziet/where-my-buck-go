@@ -1,9 +1,12 @@
 """Ledger HTTP boundary: validate transport shape and bind every request to the session owner."""
 
+from collections.abc import Callable
 from datetime import date, datetime, timezone
+from typing import cast
 from uuid import UUID
 
-from flask import Blueprint, Response, g, jsonify, request
+from flask import Blueprint, Response, g, request
+from flask import jsonify as flask_jsonify
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from where_my_buck_go.adapters.gemini import GeminiError
@@ -23,6 +26,8 @@ from where_my_buck_go.services.ledger import (
     transaction_view,
 )
 
+jsonify = cast(Callable[..., Response], flask_jsonify)
+
 
 def ledger_blueprint(
     service: LedgerService, chat: ChatService | None = None, history: HistoryService | None = None,
@@ -30,7 +35,7 @@ def ledger_blueprint(
     api = Blueprint("ledger", __name__, url_prefix="/api")
 
     def owner() -> str:
-        return g.session.user_id
+        return cast(str, g.session.user_id)
 
     def payload() -> dict[str, object]:
         value: object = request.get_json(silent=True)

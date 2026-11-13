@@ -35,10 +35,7 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: ruff check .
       - run: pytest tests -q
-      # 19 pre-existing errors (mostly Flask decorator/Any-return noise) haven't been
-      # cleaned up yet; report them without failing the build until that's done.
       - run: mypy src/where_my_buck_go
-        continue-on-error: true
 
   frontend:
     runs-on: ubuntu-latest

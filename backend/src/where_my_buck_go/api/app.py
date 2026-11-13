@@ -1,10 +1,12 @@
 """HTTP boundary: cookies, request validation, CSRF, static frontend."""
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from flask import Flask, Response, g, jsonify, request, send_from_directory
+from flask import Flask, Response, g, request, send_from_directory
+from flask import jsonify as flask_jsonify
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -19,6 +21,8 @@ from where_my_buck_go.services.auth import AuthService, LoginLimitedError, Sessi
 from where_my_buck_go.services.chat import ChatService
 from where_my_buck_go.services.history import HistoryService
 from where_my_buck_go.services.ledger import LedgerService
+
+jsonify = cast(Callable[..., Response], flask_jsonify)
 
 
 def create_app(service: AuthService | None = None, *, production: bool | None = None,
@@ -78,7 +82,7 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
                 return jsonify(error="Invalid CSRF token"), 403
         return None
 
-    @app.post("/api/auth/login")
+    @app.route("/api/auth/login", methods=["POST"])
     def login() -> Response | tuple[Response, int]:
         data: Any = request.get_json(silent=True)
         if not isinstance(data, dict) or not isinstance(data.get("username"), str) or not isinstance(
@@ -99,12 +103,18 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
         response.headers["Cache-Control"] = "no-store"
         return response
 
-    @app.get("/api/auth/me")
+    @app.route("/api/auth/me", methods=["GET"])
     def me() -> Response:
         session: SessionRecord = g.session
         return jsonify(username=session.username)
 
-    @app.post("/api/auth/change-password")
+    def clear_auth_cookies(response: Response) -> None:
+        response.set_cookie(cookie_name, "", max_age=0, httponly=True,
+                            secure=is_production, samesite="Strict", path="/")
+        response.set_cookie(csrf_cookie_name, "", max_age=0, httponly=False,
+                            secure=is_production, samesite="Strict", path="/")
+
+    @app.route("/api/auth/change-password", methods=["POST"])
     def change_password() -> Response | tuple[Response, int]:
         session: SessionRecord = g.session
         data: Any = request.get_json(silent=True)
@@ -119,19 +129,17 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
         if not changed:
             return jsonify(error="Current password is incorrect"), 401
         response = jsonify(ok=True)
-        response.delete_cookie(cookie_name, path="/", secure=is_production, httponly=True, samesite="Strict")
-        response.delete_cookie(csrf_cookie_name, path="/", secure=is_production, samesite="Strict")
+        clear_auth_cookies(response)
         return response
 
-    @app.post("/api/auth/logout")
+    @app.route("/api/auth/logout", methods=["POST"])
     def logout() -> Response:
         service.logout(request.cookies.get(cookie_name, ""))
         response = jsonify(ok=True)
-        response.delete_cookie(cookie_name, path="/", secure=is_production, httponly=True, samesite="Strict")
-        response.delete_cookie(csrf_cookie_name, path="/", secure=is_production, samesite="Strict")
+        clear_auth_cookies(response)
         return response
 
-    @app.get("/api/health")
+    @app.route("/api/health", methods=["GET"])
     def health() -> Response | tuple[Response, int]:
         if engine is not None:
             try:
@@ -143,8 +151,8 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
 
     static_dir = Path(os.environ.get("FRONTEND_DIST", Path(__file__).resolve().parents[4] / "frontend" / "dist"))
 
-    @app.get("/")
-    @app.get("/<path:filename>")
+    @app.route("/", methods=["GET"])
+    @app.route("/<path:filename>", methods=["GET"])
     def frontend(filename: str = "index.html") -> Response | tuple[Response, int]:
         if filename.startswith("api/"):
             return jsonify(error="Not found"), 404

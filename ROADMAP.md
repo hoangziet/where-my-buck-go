@@ -25,7 +25,7 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 - Align the frontend image byte limit with the backend limit and improve image URL cleanup and chat-history loading errors.
 - Add browser-level coverage for critical owner journeys and regression coverage for idempotency, authorization, and version conflicts.
-- Resolve the existing mypy errors and make type checking a required CI gate.
+- Keep strict mypy type checking as a required CI gate.
 - Keep backend tests, Ruff, mypy, frontend lint, frontend build, and browser checks green in CI.
 
 **Acceptance:** CI blocks regressions in critical flows and all required checks pass without ignored type-check failures.
@@ -42,7 +42,7 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 - Chat/image retry keys and proposal confirm/discard retry keys are retained for the same user action; failed discard remains visible and retryable.
 - Backend test suite passed: 101 tests. Ruff, frontend lint, and frontend production build passed.
-- Mypy still reports 19 errors from the backend working directory; CI currently allows these errors to pass.
+- Strict mypy passes all 27 backend source files; CI now fails on type-check errors.
 - Local Docker Compose is running PostgreSQL, backend, and frontend. Backend health returned `{"status":"ok"}`, `/login` returned HTTP 200, and the Gemini text smoke test passed without creating a transaction.
-- The browser displays the login form and the database contains one owner. Browser sign-in and ledger journeys remain unverified because the owner's password is not available in this task.
+- The owner signed in through the browser; dashboard, transactions, chat, and settings pages loaded. No ledger write was made during browser verification, so transaction creation and correction journeys remain unverified.
 - Frontend image validation now matches the backend's 4,000,000-byte limit; chat history load failures are shown in the conversation, and image preview URLs are revoked when replaced, removed, or unmounted.
