@@ -19,7 +19,7 @@ Think and write repository content in English; reply to users in Vietnamese. Kee
 
 - `docker compose -f compose.local.yml up -d --build` builds and starts PostgreSQL, migrations, backend, and frontend. Open `http://localhost:3100`.
 - `TEST_DATABASE_URL=postgresql+psycopg://... ./.venv/bin/pytest backend/tests -q` runs backend tests, including PostgreSQL integration tests. Use a disposable database; integration tests create and drop a temporary schema.
-- `./.venv/bin/ruff check backend` and `./.venv/bin/mypy backend/src/where_my_buck_go` check Python style and types.
+- `./.venv/bin/ruff check backend` and `./.venv/bin/mypy --config-file backend/pyproject.toml backend/src/where_my_buck_go` check Python style and types.
 - From `frontend/`, run `npm ci`, `npm run lint`, and `npm run build`. For development, use `npm run dev -- -p 3100`.
 
 ## Code Quality and Style

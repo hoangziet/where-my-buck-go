@@ -40,8 +40,8 @@ class R2EvidenceStore(EvidenceStore):
         if missing:
             raise ValueError(f"Missing required R2 configuration: {', '.join(missing)}")
 
-        import boto3  # type: ignore[import-untyped]
-        from botocore.config import Config  # type: ignore[import-untyped]
+        import boto3
+        from botocore.config import Config
 
         endpoint_override = os.environ.get("R2_ENDPOINT_URL", "").strip()
         endpoint_url = endpoint_override or f"https://{account_id}.r2.cloudflarestorage.com"

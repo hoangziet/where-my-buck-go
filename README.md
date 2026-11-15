@@ -197,7 +197,7 @@ every active session, the same as the CLI reset.
 ## Checks
 
 `./.venv/bin/pytest backend/tests -q`, `./.venv/bin/ruff check backend`,
-`./.venv/bin/mypy backend/src/where_my_buck_go`, and from `frontend/`, `npm run lint`, `npm run build`,
+`./.venv/bin/mypy --config-file backend/pyproject.toml backend/src/where_my_buck_go`, and from `frontend/`, `npm run lint`, `npm run build`,
 and `npm run test:e2e` (requires Playwright Chromium; the test command starts the production server).
 
 Python source lives at `backend/src/where_my_buck_go/`. Existing local PostgreSQL databases named
