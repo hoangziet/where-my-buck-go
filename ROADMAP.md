@@ -43,7 +43,7 @@ The goal is a dependable local web app for the owner. Production deployment is a
 1. **Validate the current source on GitHub.** The latest successful run is `43360142327` at `dca45f0`; `origin/main` is still at that commit, and the current local changes have not run in GitHub Actions. Publish the reviewed commits, then require every CI job to pass before calling the branch verified.
 2. **Enforce CI on the main branch.** GitHub currently reports no required status checks. After the new run creates fresh checks, require pull requests and successful `backend`, `frontend`, and `docker-compose` jobs before merging.
 3. **Verify live R2 access.** Configure a private bucket and bucket-scoped token, then exercise disposable text and image upload/read/delete operations and compare SHA-256 values. Keep owner receipts out of this test.
-4. **Prepare a production-like recovery target.** Select a host and domain, configure TLS, production secrets, firewall rules, and off-host encrypted backups. Rehearse PostgreSQL and evidence recovery against live R2 without using local owner data.
+4. **Prepare a production-like recovery target.** Select a host and domain, configure TLS, production secrets, firewall rules, and off-host encrypted backups. Choose a recovery-point target and retention period, schedule the backup script, monitor failures, and rehearse PostgreSQL and evidence recovery against live R2 without using local owner data.
 5. **Deploy only with explicit owner approval.** Take a verified backup, deploy, check health/login/evidence flows and monitoring, and verify a tested rollback path before treating production readiness as complete.
 
 ## Current Evidence

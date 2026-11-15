@@ -115,6 +115,11 @@ replaced, it leaves the app stopped and retains the pre-restore backup for opera
 on an isolated production Compose project before relying on it; a live Cloudflare R2 rehearsal still needs
 the owner's bucket credentials.
 
+These backup commands run on demand. The repository does not install a recurring timer or copy archives to
+off-host storage. Before production launch, choose the recovery-point target and retention period, schedule
+`backup-production.sh` on the host, and copy each archive together with its `.sha256` sidecar to encrypted
+off-host storage. Monitor failures and rehearse restoring a scheduled backup.
+
 ## Run services on the host
 
 For host-based development, use Python 3.10+, Node 20+, and Docker. Start only PostgreSQL with
@@ -126,7 +131,8 @@ then load `.env` with `set -a; source ../.env; set +a` and start Flask with
 `../.venv/bin/flask --app where_my_buck_go.api.app:create_app run --port 5000`.
 In another shell, run `cd frontend && npm ci && npm run dev -- -p 3100` and visit
 http://localhost:3100.
-Local testing takes priority; Oracle deployment only starts after the owner approves the local app.
+Local testing takes priority; production deployment to the selected host starts only after the owner approves
+the local app and deployment target.
 The Gemini adapter can be verified independently without writing financial data. Set `GEMINI_API_KEY`
 in `.env`, load `.env` into the shell, then run `./.venv/bin/wmbg-gemini-smoke` from the repository root.
 The default model is `gemini-3.1-flash-lite` (override with `GEMINI_MODEL`). The command makes one
