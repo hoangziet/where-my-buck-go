@@ -112,6 +112,19 @@ class TransactionTime:
         return datetime.combine(self.occurred_date, self.occurred_time, LOCAL_ZONE)
 
 
+def is_period_compatible(clock: time, period: Period) -> bool:
+    h = clock.hour
+    if period == "sáng":
+        return 4 <= h < 12
+    if period == "trưa":
+        return 11 <= h < 14
+    if period == "chiều":
+        return 13 <= h <= 18
+    if period == "tối":
+        return h >= 18 or h < 5
+    return False
+
+
 def resolve_transaction_time(
     date_text: str | None, period: str | None, time_text: str | None, received_at: datetime,
 ) -> TransactionTime:
@@ -123,7 +136,7 @@ def resolve_transaction_time(
     if time_text is not None and time_text != "":
         clock = parse_clock(time_text)
         inferred = period_for(clock)
-        if stated_period is not None and stated_period != inferred:
+        if stated_period is not None and not is_period_compatible(clock, stated_period):
             raise InvalidTransactionTime("Explicit clock conflicts with the stated period; ask the owner")
         return TransactionTime(occurred_date, clock, inferred, "explicit")
     selected: Period = stated_period or "sáng"
