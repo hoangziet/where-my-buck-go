@@ -63,7 +63,9 @@ a backup for recovery.
 The selected AWS target and terminal automation sequence are documented in
 [AWS Deployment Plan](AWS_DEPLOYMENT_PLAN.md). That target uses managed RDS PostgreSQL outside Docker,
 S3 evidence storage, and an AWS-provided HTTPS address. Infrastructure and release automation live in
-`infra/aws/`, `scripts/aws/`, and `compose.aws.yml`; provisioning and live acceptance remain pending.
+`infra/aws/`, `scripts/aws/`, and `compose.aws.yml`. Production is deployed at
+https://d1498jatb9ljtb.cloudfront.net; see the [AWS runbook](deploy/aws/README.md) for verified flows
+and remaining acceptance gates.
 Follow the [AWS runbook](deploy/aws/README.md). The legacy `compose.prod.yml` below uses containerized
 PostgreSQL and R2 and is not the AWS deployment profile.
 

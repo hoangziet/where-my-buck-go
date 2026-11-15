@@ -17,7 +17,10 @@ The web app is the first delivery channel. Telegram is a possible later mileston
 The selected production target is AWS: EC2 and CloudFront for the application, managed RDS PostgreSQL outside
 Docker, private S3 evidence storage, and an AWS-provided HTTPS address without a purchased domain.
 [AWS Deployment Plan](AWS_DEPLOYMENT_PLAN.md) defines Terraform, AWS CLI, and GitHub CLI automation,
-cost assumptions, network gates, and release acceptance. Infrastructure and deployment automation are implemented; cloud provisioning and public-URL acceptance remain pending.
+cost assumptions, network gates, and release acceptance. Production is deployed at
+https://d1498jatb9ljtb.cloudfront.net. API login/logout, report summary, chat, one-image draft/evidence,
+backup hashes, and a separate-database restore rehearsal have passed. Browser confirmation, CSV export,
+rollback, and a restore to a separate RDS host remain open acceptance work.
 
 Backend responsibilities are separated into `api/` (HTTP, auth, validation), `domain/` (business rules), `services/` (use cases), and `adapters/` (database, Gemini, and evidence integrations). The owner identity comes from the authenticated session, never from request data.
 
@@ -43,4 +46,4 @@ Backend responsibilities are separated into `api/` (HTTP, auth, validation), `do
 
 Keep modules cohesive, public Python APIs typed, and TypeScript strict. Cover money, date/time, authorization, idempotency, and draft-confirm behavior with tests. Run the backend tests, Ruff, mypy, frontend lint, and frontend build before reporting a code change as complete.
 
-Implemented local capabilities include authentication, draft/confirm ledger flows, chat, single-image intake, reports, evidence viewing, CSV export, Docker Compose, and an S3-compatible production R2 evidence adapter. Remaining production work follows the AWS deployment plan, including native S3 support, external RDS, automated infrastructure and releases, and a recovery rehearsal. Telegram remains a later integration. Production deployment requires owner authorization for the concrete resource and cost plan.
+Implemented capabilities include authentication, draft/confirm ledger flows, chat, single-image intake, reports, evidence viewing, CSV export, Docker Compose, AWS S3 and R2 evidence adapters, managed RDS, Terraform infrastructure, and terminal-driven releases. Production follow-up acceptance follows the AWS deployment plan. Telegram remains a later integration.

@@ -1,6 +1,6 @@
 # Product Readiness Roadmap
 
-The goal is a dependable local web app for the owner. Production deployment is a later milestone and must wait for explicit owner approval. Each iteration follows this loop: reproduce the highest-priority gap, make one focused change, run the applicable checks, exercise the changed flow in the running Docker app, commit the verified change using Conventional Commits, and update this roadmap with evidence.
+The goal is a dependable owner-operated app. Local development remains supported, and production is deployed on AWS. Each iteration follows this loop: reproduce the highest-priority gap, make a focused change, run applicable checks, exercise the changed flow, commit with Conventional Commits, and update this roadmap with evidence.
 
 ## Milestones
 
@@ -30,21 +30,20 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 **Acceptance:** CI blocks regressions in critical flows and all required checks pass without ignored type-check failures.
 
-### 4. Production Readiness — In Progress
+### 4. Production Readiness — Deployed, Acceptance In Progress
 
 - Implement the [AWS deployment plan](AWS_DEPLOYMENT_PLAN.md): managed RDS outside Docker, native S3 evidence storage, an AWS-provided HTTPS address, and Terraform/AWS CLI/GitHub CLI automation. Existing R2 recovery checks remain useful regression coverage.
-- Review secrets, cookies, logging, resource limits, and operational monitoring.
-- Deploy only after local acceptance and explicit owner approval.
+- Production is deployed at the AWS CloudFront URL using managed RDS outside Docker, native S3 evidence storage, and Terraform/AWS CLI/GitHub CLI automation.
+- Verify operational behavior through the public URL with synthetic data and record remaining browser acceptance.
 
-**Acceptance:** a documented deployment and recovery rehearsal succeeds without exposing local data or secrets.
+**Acceptance:** core hosted flows and backup restoration are verified without exposing local data or secrets; browser confirmation, CSV export, rollback, and restore to a separate RDS host remain open.
 
 ## Remaining Work — Ordered Gates
 
-1. **Repair GitHub CI.** PR #12 is merged into `main` at `f64bf81`. Run `43668928237` fails its backend job; the PR run reports two unused `type: ignore` comments in `r2_evidence.py`. Frontend and Docker checks pass. Fix the typing/dependency mismatch before deployment.
-2. **Enforce CI on the main branch.** Inspect current protection through `gh api`, then configure pull-request requirements and successful `backend`, `frontend`, and `docker-compose` checks, reporting any account-plan limitations.
-3. **Implement the AWS app profile.** Add AWS S3 support and verified TLS access to external RDS, retaining local Docker development. Automate infrastructure and GitHub setup according to the deployment plan.
-4. **Rehearse the complete AWS path.** Verify the AWS-managed HTTPS address, origin transport, cookies, CSRF, private RDS connectivity, S3 evidence access, backups, and recovery using synthetic data. Present the regional resource/cost plan before provisioning.
-5. **Release with owner authorization.** Deploy the verified commit using the terminal workflow, record the public URL and image digests, and verify monitoring and rollback before treating production readiness as complete.
+1. **Complete public-browser acceptance.** Verify explicit transaction confirmation/discard, CSV export, secure cookies, CSRF, and slow Gemini handling through the live URL with synthetic data.
+2. **Rehearse rollback.** Review migration compatibility, then verify rollback to previous image digests without changing the database.
+3. **Rehearse cross-instance recovery.** The AWS Free Plan currently permits only one RDS instance. Repeat restore against a separate RDS host when the account plan permits it; current archive restore was verified in a distinct temporary database on the existing instance.
+4. **Finish operational handover.** Review actual AWS charges against the budget notification; add an SNS email subscription if inbox delivery is desired.
 
 ## Current Evidence
 
@@ -56,6 +55,14 @@ The goal is a dependable local web app for the owner. Production deployment is a
 - CI includes Python and npm vulnerability audits, PostgreSQL and frontend checks, local Compose owner journeys, local backup/restore verification, production-profile security checks, plus production PostgreSQL/R2 backup and restore against S3Mock. A local rehearsal restored one synthetic evidence object and verified its SHA-256 against the restored database.
 - Production configuration includes isolated backend networking, health checks, resource/log limits, secure cookies and proxy handling. `ROADMAP.md` and production runbooks document the remaining release gates.
 
+### Verified in AWS
+
+- Production URL: https://d1498jatb9ljtb.cloudfront.net. Release commit: `0221f2d4e8298fd3f3c0ce777202e3e63fa0447e`.
+- Health, authenticated API login/logout, report summary, chat Q&A, one-image draft/evidence retrieval, and zero active transactions were verified. Synthetic receipt intake was discarded without writing to the ledger.
+- Production currently blocks frontend mutations because the app does not read the secure `__Host-wmbg_csrf` cookie; PR #16 fixes this. Do not treat UI write flows as accepted until that release is deployed and rechecked.
+- Daily PostgreSQL/evidence backup objects were downloaded and matched their manifest SHA-256 values. Restore produced one chat, two messages, the known QA message, and zero transactions; evidence restore verified zero objects.
+- A separate-database restore rehearsal used a temporary database on the same RDS host because the AWS Free Plan rejected creation of another RDS instance. The temporary database, SecureString parameter, IAM policy, and S3 bucket were deleted. Production health/login checks still pass.
+
 ### Continuous delivery loop
 
-For each iteration, take the highest open gate, define observable acceptance evidence, make one focused change, run its tests and relevant Docker journey, commit the verified change using Conventional Commits, and update this roadmap with results. If GitHub CI fails, fix that failure before advancing to deployment. Keep production deployment behind the owner approval gate.
+For each iteration, take the highest open gate, define observable acceptance evidence, make one focused change, run applicable checks, commit with Conventional Commits, and update this roadmap. Production infrastructure changes use reviewed PRs; do not push directly to `main`. AWS releases remain terminal-driven from CI-approved commits, and GitHub Actions never deploys to AWS.
