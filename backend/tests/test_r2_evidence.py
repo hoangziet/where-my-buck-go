@@ -89,6 +89,19 @@ def test_r2_configuration_fails_fast_when_credentials_are_missing(monkeypatch: p
         R2EvidenceStore.from_environment()
 
 
+def test_r2_store_accepts_a_path_style_s3_compatible_test_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("R2_ACCOUNT_ID", "test-account")
+    monkeypatch.setenv("R2_ACCESS_KEY_ID", "test-access-key")
+    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "test-secret-key")
+    monkeypatch.setenv("R2_BUCKET_NAME", "test-bucket")
+    monkeypatch.setenv("R2_ENDPOINT_URL", "http://s3mock:9090")
+
+    store = R2EvidenceStore.from_environment()
+
+    assert store.client.meta.endpoint_url == "http://s3mock:9090"
+    assert store.client.meta.config.s3["addressing_style"] == "path"
+
+
 def test_create_app_in_production_fails_without_r2_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME"):
         monkeypatch.delenv(name, raising=False)

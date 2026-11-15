@@ -43,13 +43,20 @@ class R2EvidenceStore(EvidenceStore):
         import boto3  # type: ignore[import-untyped]
         from botocore.config import Config  # type: ignore[import-untyped]
 
+        endpoint_override = os.environ.get("R2_ENDPOINT_URL", "").strip()
+        endpoint_url = endpoint_override or f"https://{account_id}.r2.cloudflarestorage.com"
+        config = (
+            Config(signature_version="s3v4", s3={"addressing_style": "path"})
+            if endpoint_override
+            else Config(signature_version="s3v4")
+        )
         client = boto3.client(
             "s3",
-            endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+            endpoint_url=endpoint_url,
             region_name="auto",
             aws_access_key_id=access_key_id,
             aws_secret_access_key=secret_access_key,
-            config=Config(signature_version="s3v4"),
+            config=config,
         )
         return cls(client, bucket)
 

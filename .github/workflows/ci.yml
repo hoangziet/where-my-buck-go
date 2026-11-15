@@ -65,7 +65,7 @@ jobs:
       - name: Validate Compose configurations
         run: |
           docker compose -f compose.local.yml config -q
-          POSTGRES_PASSWORD=ci-pw AUTH_HMAC_KEY=ci-only-auth-key-with-at-least-thirty-two-bytes R2_ACCOUNT_ID=ci R2_ACCESS_KEY_ID=ci R2_SECRET_ACCESS_KEY=ci R2_BUCKET_NAME=ci docker compose -f compose.prod.yml config -q
+          POSTGRES_PASSWORD=ci-pw AUTH_HMAC_KEY=ci-only-auth-key-with-at-least-thirty-two-bytes R2_ACCOUNT_ID=ci R2_ACCESS_KEY_ID=ci R2_SECRET_ACCESS_KEY=ci R2_BUCKET_NAME=ci docker compose -f compose.prod.yml -f compose.ci-r2.yml config -q
       - name: Build and start the local stack
         run: docker compose -f compose.local.yml up -d --build --wait --wait-timeout 180
       - name: Verify backend and frontend routes
@@ -173,11 +173,38 @@ jobs:
           R2_BUCKET_NAME: ci-smoke
         run: |
           set -euo pipefail
-          docker compose -p wmbg-production-smoke -f compose.prod.yml up -d --build --wait --wait-timeout 180
-          docker compose -p wmbg-production-smoke -f compose.prod.yml exec -T backend python -c 'import shutil; assert shutil.which("wmbg-export-r2-evidence"); assert shutil.which("wmbg-restore-r2-evidence")'
-          docker compose -p wmbg-production-smoke -f compose.prod.yml exec -T backend python -c 'from where_my_buck_go.adapters.auth_repo import PostgresAuthStore; from where_my_buck_go.adapters.db import database_url_from_environment, engine_for; from where_my_buck_go.services.auth import AuthService; import os; assert AuthService(PostgresAuthStore(engine_for(database_url_from_environment())), os.environ["AUTH_HMAC_KEY"].encode()).bootstrap("smoke-owner", "prod-smoke-password-123")'
+          docker compose -p wmbg-production-smoke -f compose.prod.yml -f compose.ci-r2.yml up -d --build --wait --wait-timeout 180
+          docker compose -p wmbg-production-smoke -f compose.prod.yml -f compose.ci-r2.yml exec -T backend python -c 'import shutil; assert shutil.which("wmbg-export-r2-evidence"); assert shutil.which("wmbg-restore-r2-evidence")'
+          docker compose -p wmbg-production-smoke -f compose.prod.yml -f compose.ci-r2.yml exec -T backend python - <<'PY'
+          import os
+          import time
+
+          import boto3
+          from botocore.config import Config
+          from botocore.exceptions import EndpointConnectionError
+
+          client = boto3.client(
+              "s3",
+              endpoint_url=os.environ["R2_ENDPOINT_URL"],
+              aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+              aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+              region_name="auto",
+              config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+          )
+          for attempt in range(30):
+              try:
+                  client.head_bucket(Bucket=os.environ["R2_BUCKET_NAME"])
+                  print("S3-compatible evidence store is ready")
+                  break
+              except EndpointConnectionError:
+                  if attempt == 29:
+                      raise
+                  time.sleep(2)
+          PY
+          docker compose -p wmbg-production-smoke -f compose.prod.yml -f compose.ci-r2.yml exec -T backend python -c 'from where_my_buck_go.adapters.auth_repo import PostgresAuthStore; from where_my_buck_go.adapters.db import database_url_from_environment, engine_for; from where_my_buck_go.services.auth import AuthService; import os; assert AuthService(PostgresAuthStore(engine_for(database_url_from_environment())), os.environ["AUTH_HMAC_KEY"].encode()).bootstrap("smoke-owner", "prod-smoke-password-123")'
           python3 - <<'PY'
           import json
+          import uuid
           import urllib.request
 
           health = urllib.request.urlopen("http://127.0.0.1:3000/api/health", timeout=5)
@@ -190,18 +217,97 @@ jobs:
           )
           response = urllib.request.urlopen(login, timeout=5)
           assert response.status == 200
+          csrf_token = json.loads(response.read())["csrfToken"]
           cookies = response.headers.get_all("Set-Cookie") or []
           session_cookie = next(cookie for cookie in cookies if cookie.startswith("__Host-wmbg_session="))
           csrf_cookie = next(cookie for cookie in cookies if cookie.startswith("__Host-wmbg_csrf="))
           assert "Secure" in session_cookie and "HttpOnly" in session_cookie and "SameSite=Strict" in session_cookie
           assert "Secure" in csrf_cookie and "SameSite=Strict" in csrf_cookie and "HttpOnly" not in csrf_cookie
-          print("Production health, HSTS, and authentication cookie checks passed")
+          cookie_header = "; ".join(cookie.split(";", 1)[0] for cookie in (session_cookie, csrf_cookie))
+          proposal = urllib.request.Request(
+              "http://127.0.0.1:3000/api/proposals",
+              data=json.dumps({
+                  "expectedVersion": 0,
+                  "amount": "17500",
+                  "currency": "VND",
+                  "direction": "expense",
+                  "description": "CI R2 recovery verification",
+                  "category": "food_drink",
+                  "occurredDate": "2026-11-09",
+                  "occurredTime": "18:36",
+                  "evidenceText": "Synthetic S3-compatible recovery evidence.",
+              }).encode(),
+              headers={
+                  "Content-Type": "application/json",
+                  "Cookie": cookie_header,
+                  "X-CSRF-Token": csrf_token,
+                  "Idempotency-Key": str(uuid.uuid4()),
+              },
+          )
+          proposal_response = urllib.request.urlopen(proposal, timeout=10)
+          assert proposal_response.status == 201
+          evidence_id = json.loads(proposal_response.read())["evidenceIds"][0]
+          evidence_request = urllib.request.Request(
+              f"http://127.0.0.1:3000/api/evidence/{evidence_id}",
+              headers={"Cookie": cookie_header},
+          )
+          evidence_response = urllib.request.urlopen(evidence_request, timeout=10)
+          assert evidence_response.read().decode() == "Synthetic S3-compatible recovery evidence."
+          print("Production health, HSTS, authentication, and S3-compatible evidence checks passed")
           PY
-          backend_container="$(docker compose -p wmbg-production-smoke -f compose.prod.yml ps -q backend)"
+          backend_container="$(docker compose -p wmbg-production-smoke -f compose.prod.yml -f compose.ci-r2.yml ps -q backend)"
           backend_ports="$(docker inspect --format '{{json .NetworkSettings.Ports}}' "$backend_container")"
           BACKEND_PORTS="$backend_ports" python3 -c 'import json, os; assert json.loads(os.environ["BACKEND_PORTS"])["5000/tcp"] is None'
-          frontend_container="$(docker compose -p wmbg-production-smoke -f compose.prod.yml ps -q frontend)"
+          frontend_container="$(docker compose -p wmbg-production-smoke -f compose.prod.yml -f compose.ci-r2.yml ps -q frontend)"
           test "$(docker port "$frontend_container" 3000/tcp)" = "127.0.0.1:3000"
+      - name: Back up and restore the production stack with an S3 test server
+        env:
+          POSTGRES_PASSWORD: ci/prod@smoke:pass%
+          AUTH_HMAC_KEY: ci-only-auth-key-with-at-least-thirty-two-bytes
+          R2_ACCOUNT_ID: ci-smoke
+          R2_ACCESS_KEY_ID: ci-smoke
+          R2_SECRET_ACCESS_KEY: ci-smoke
+          R2_BUCKET_NAME: ci-smoke
+          COMPOSE_PROJECT_NAME: wmbg-production-smoke
+          COMPOSE_OVERRIDE_FILE: ${{ github.workspace }}/compose.ci-r2.yml
+          RECOVERY_BACKUP_DIR: ${{ runner.temp }}/wmbg-production-pre-restore
+        run: |
+          set -euo pipefail
+          backup_dir="$RUNNER_TEMP/wmbg-production-backup"
+          ./scripts/backup-production.sh "$backup_dir"
+          archive="$(find "$backup_dir" -maxdepth 1 -name 'where-my-buck-go-production-*.tar.gz' -print -quit)"
+          test -n "$archive"
+          ./scripts/restore-production.sh --confirm-replace-production-data "$archive"
+          docker compose -p wmbg-production-smoke -f compose.prod.yml -f compose.ci-r2.yml exec -T backend python - <<'PY'
+          import hashlib
+          from sqlalchemy import select
+
+          from where_my_buck_go.adapters.db import database_url_from_environment, engine_for, evidence
+          from where_my_buck_go.adapters.r2_evidence import R2EvidenceStore
+
+          engine = engine_for(database_url_from_environment())
+          try:
+              with engine.connect() as connection:
+                  rows = connection.execute(
+                      select(evidence.c.storage_key, evidence.c.sha256_digest, evidence.c.kind)
+                  ).mappings().all()
+              if len(rows) != 1:
+                  raise RuntimeError(f"Expected one restored evidence row, found {len(rows)}")
+              store = R2EvidenceStore.from_environment()
+              for row in rows:
+                  content = (
+                      store.get_text(row["storage_key"]).encode("utf-8")
+                      if row["kind"] == "text"
+                      else store.get_binary(row["storage_key"])
+                  )
+                  if hashlib.sha256(content).digest() != bytes(row["sha256_digest"]):
+                      raise RuntimeError("Restored R2 object does not match its database digest")
+              if content != b"Synthetic S3-compatible recovery evidence.":
+                  raise RuntimeError("Restored R2 object content is unexpected")
+              print("Production backup/restore preserved the R2 object and database digest")
+          finally:
+              engine.dispose()
+          PY
       - name: Remove the production smoke-test stack
         if: always()
         env:
@@ -211,7 +317,7 @@ jobs:
           R2_ACCESS_KEY_ID: ci-smoke
           R2_SECRET_ACCESS_KEY: ci-smoke
           R2_BUCKET_NAME: ci-smoke
-        run: docker compose -p wmbg-production-smoke -f compose.prod.yml down -v --remove-orphans
+        run: docker compose -p wmbg-production-smoke -f compose.prod.yml -f compose.ci-r2.yml down -v --remove-orphans
       - name: Stop the stack
         if: always()
         run: docker compose -f compose.local.yml down

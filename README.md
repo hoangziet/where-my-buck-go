@@ -75,6 +75,9 @@ R2_BUCKET_NAME=your-r2-bucket-name
 GEMINI_API_KEY=your-gemini-api-key # optional
 ```
 
+Leave `R2_ENDPOINT_URL` unset for Cloudflare R2. It is an optional override used only with an isolated
+S3-compatible test server.
+
 The database password is passed as a separate component and SQLAlchemy builds the connection URL with
 proper escaping, so generated passwords may contain reserved URL characters.
 

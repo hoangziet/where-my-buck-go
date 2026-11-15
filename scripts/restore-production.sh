@@ -20,6 +20,9 @@ fi
 
 COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/compose.prod.yml}"
 COMPOSE=(docker compose --project-directory "$ROOT_DIR" -f "$COMPOSE_FILE")
+if [[ -n "${COMPOSE_OVERRIDE_FILE:-}" ]]; then
+  COMPOSE+=(-f "$COMPOSE_OVERRIDE_FILE")
+fi
 RUNNING_SERVICES="$("${COMPOSE[@]}" ps --services --status running)"
 for SERVICE in db backend frontend; do
   if ! grep -Fxq "$SERVICE" <<<"$RUNNING_SERVICES"; then
