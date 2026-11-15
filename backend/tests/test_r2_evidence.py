@@ -2,6 +2,7 @@
 
 import hashlib
 from io import BytesIO
+from uuid import uuid4
 
 import pytest
 
@@ -67,6 +68,20 @@ def test_r2_store_requires_a_valid_uuid_key() -> None:
         store.get_text("../private-file")
 
 
+def test_r2_store_restore_preserves_key_and_verifies_digest() -> None:
+    client = FakeS3Client()
+    store = R2EvidenceStore(client, "owner-evidence")
+    key = str(uuid4())
+    content = b"original object"
+    digest = hashlib.sha256(content).digest()
+
+    store.restore_object(key, "text", content, digest)
+
+    assert client.objects[key] == (content, "text")
+    with pytest.raises(ValueError, match="integrity validation"):
+        store.restore_object(str(uuid4()), "text", b"tampered", digest)
+
+
 def test_r2_configuration_fails_fast_when_credentials_are_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME"):
         monkeypatch.delenv(name, raising=False)
@@ -82,4 +97,3 @@ def test_create_app_in_production_fails_without_r2_credentials(monkeypatch: pyte
     from where_my_buck_go.api.app import create_app
     with pytest.raises(ValueError, match="Missing required R2 configuration"):
         create_app(production=True)
-

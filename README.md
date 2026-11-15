@@ -96,6 +96,22 @@ On initial production launch, create the owner account with:
 
 Deploy only after local acceptance and explicit owner approval.
 
+### Production backup and restore
+
+With the production stack healthy and the R2 token configured, create a consistent PostgreSQL plus R2
+evidence backup with `./scripts/backup-production.sh /path/to/encrypted/backups`. The script pauses frontend
+and backend writes, exports and checksum-verifies each database-referenced R2 object, validates the database
+dump/archive, writes an owner-only archive and SHA-256 sidecar, then restarts the app. Keep the archive on
+encrypted off-host storage; keep `.env` and secrets separately.
+
+To replace the production database with a backup, run
+`./scripts/restore-production.sh --confirm-replace-production-data /path/to/backup.tar.gz`. The script
+checks the archive checksum and contents, creates a fresh pre-restore backup, restores PostgreSQL, restores
+the matching R2 objects, then checks service health and `/login`. If recovery fails after the database is
+replaced, it leaves the app stopped and retains the pre-restore backup for operator recovery. Rehearse this
+on an isolated production Compose project before relying on it; a live Cloudflare R2 rehearsal still needs
+the owner's bucket credentials.
+
 ## Run services on the host
 
 For host-based development, use Python 3.10+, Node 20+, and Docker. Start only PostgreSQL with

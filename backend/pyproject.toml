@@ -26,6 +26,8 @@ wmbg-bootstrap = "where_my_buck_go.cli:main"
 wmbg-reset-password = "where_my_buck_go.cli:reset_main"
 wmbg-gemini-smoke = "where_my_buck_go.gemini_smoke:main"
 wmbg-gemini-image-smoke = "where_my_buck_go.gemini_image_smoke:main"
+wmbg-export-r2-evidence = "where_my_buck_go.cli_r2_backup:export_main"
+wmbg-restore-r2-evidence = "where_my_buck_go.cli_r2_backup:restore_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

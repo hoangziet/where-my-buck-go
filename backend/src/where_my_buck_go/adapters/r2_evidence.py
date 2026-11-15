@@ -1,6 +1,7 @@
 """Cloudflare R2 evidence storage through its S3-compatible API."""
 
 import hashlib
+import hmac
 import os
 from collections.abc import Mapping
 from typing import Protocol
@@ -98,6 +99,24 @@ class R2EvidenceStore(EvidenceStore):
 
     def discard(self, key: str) -> None:
         self.client.delete_object(Bucket=self.bucket, Key=str(UUID(key)))
+
+    def restore_object(self, key: str, content_type: str, content: bytes, digest: bytes) -> None:
+        object_key = str(UUID(key))
+        if content_type == "text":
+            maximum = 10_000
+        elif content_type in ("image/png", "image/jpeg"):
+            maximum = 4_000_000
+        else:
+            raise ValueError(f"Unsupported evidence type: {content_type}")
+        if not content or len(content) > maximum or not hmac.compare_digest(hashlib.sha256(content).digest(), digest):
+            raise ValueError(f"Restored evidence failed integrity validation: {object_key}")
+        self.client.put_object(
+            Bucket=self.bucket,
+            Key=object_key,
+            Body=content,
+            ContentType=content_type,
+            Metadata={"sha256": digest.hex()},
+        )
 
 
 def cast_read(body: object, limit: int) -> bytes:
