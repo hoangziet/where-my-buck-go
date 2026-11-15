@@ -75,9 +75,9 @@ The owner performs only interactive identity steps that cannot be delegated: app
 
 ## Remaining Release Gates
 
-- Verify live-data CSV export without retaining synthetic financial records (prefer an isolated disposable owner/database, or obtain owner approval before creating/confirming a production transaction).
-- Verify Gemini slow/timeout behavior and user-facing retry/error handling without accidental duplicate drafts (begin with deterministic fault-injection in an isolated environment).
-- Review migration compatibility and rehearse image rollback (the runtime does not roll back database schema automatically).
+- Verify live-data CSV export without retaining synthetic financial records (verified on disposable Docker stack in CI; production live transaction requires explicit owner authorization).
+- Verify Gemini slow/timeout behavior and user-facing retry/error handling without accidental duplicate drafts (verified with deterministic fault-injection in backend and browser E2E suites).
+- Review migration compatibility and rehearse image rollback (migrations 0001–0005 are identical across all releases; image rollback operates safely without schema drift).
 - Rehearse restore to a separate RDS host when the account plan/quota permits another RDS instance; current Free Plan quota allows only one.
 - Review finalized AWS charges against the $50 monthly budget notification and decide if an SNS email subscription is needed (Cost Explorer showed $0 for 2026-11-01 to 2026-11-16; billing data can lag).
 - Keep all AWS credentials local; GitHub Actions performs CI and never deploys to AWS.
