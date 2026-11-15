@@ -43,6 +43,23 @@ test("owner can sign in, load the dashboard, and sign out", async ({ page }) => 
   await page.getByLabel("Password").fill("test-only-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText("Good to see you, owner", { exact: true }).first()).toBeVisible();
+  const appNavigation = page.locator("header nav[aria-label='App']");
+  await expect(appNavigation).toBeVisible();
+  await expect(appNavigation.getByRole("link", { name: "Dashboard" })).toBeVisible();
+  await expect(appNavigation.getByRole("link", { name: "AI Chat" })).toBeVisible();
+  await expect(appNavigation.getByRole("link", { name: "Transactions" })).toBeVisible();
+  await expect(page.getByRole("complementary")).toHaveCount(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(appNavigation).toBeHidden();
+  const mobileNavigation = page.getByRole("navigation", { name: "Mobile app" });
+  await expect(mobileNavigation).toBeVisible();
+  await expect(mobileNavigation.getByRole("link", { name: "Dashboard" })).toBeVisible();
+  await expect(mobileNavigation.getByRole("link", { name: "AI Chat" })).toBeVisible();
+  await expect(mobileNavigation.getByRole("link", { name: "Transactions" })).toBeVisible();
+  await expect(page.locator("nav.fixed")).toHaveCount(0);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(appNavigation).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByLabel("Username")).toBeVisible();

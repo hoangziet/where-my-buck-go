@@ -1,7 +1,10 @@
 """PostgreSQL engine and schema."""
 
+import os
+
 from sqlalchemy import (
     JSON,
+    URL,
     Boolean,
     Column,
     Date,
@@ -177,3 +180,23 @@ def engine_for(url: str, *, connect_args: dict[str, str] | None = None) -> Engin
         record_sql(statement)
 
     return engine
+
+
+def database_url_from_environment() -> str:
+    """Build a safely escaped URL from DB_* components, or use DATABASE_URL."""
+    component_names = ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD")
+    if not any(name in os.environ for name in component_names):
+        return os.environ["DATABASE_URL"]
+
+    missing = [name for name in component_names if not os.environ.get(name)]
+    if missing:
+        raise ValueError(f"Missing database configuration: {', '.join(missing)}")
+    port = int(os.environ.get("DB_PORT", "5432"))
+    return URL.create(
+        "postgresql+psycopg",
+        username=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        host=os.environ["DB_HOST"],
+        port=port,
+        database=os.environ["DB_NAME"],
+    ).render_as_string(hide_password=False)

@@ -158,3 +158,16 @@ def test_change_password_endpoint(setup: tuple[AuthService, MemoryAuthStore]) ->
     assert client.get("/api/auth/me").status_code == 401
     relogged = client.post("/api/auth/login", json={"username": "owner", "password": "new-long-password-123"})
     assert relogged.status_code == 200
+
+
+def test_production_proxy_fix_resolves_client_ip(setup: tuple[AuthService, MemoryAuthStore]) -> None:
+    import hmac
+
+    service, store = setup
+    app = create_app(service, production=True)
+    client = app.test_client()
+    client.post("/api/auth/login", json={"username": "owner", "password": "wrong"},
+                headers={"X-Forwarded-For": "203.0.113.195"})
+    expected_digest = hmac.digest(service.hmac_key, b"203.0.113.195", "sha256")
+    assert expected_digest in store.attempts
+

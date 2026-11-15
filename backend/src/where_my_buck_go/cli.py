@@ -7,7 +7,7 @@ import secrets
 from pathlib import Path
 
 from where_my_buck_go.adapters.auth_repo import PostgresAuthStore
-from where_my_buck_go.adapters.db import engine_for
+from where_my_buck_go.adapters.db import database_url_from_environment, engine_for
 from where_my_buck_go.services.auth import AuthService
 
 
@@ -19,7 +19,7 @@ def main() -> None:
     confirmation = getpass.getpass("Confirm password: ")
     if password != confirmation:
         parser.error("Passwords do not match")
-    service = AuthService(PostgresAuthStore(engine_for(os.environ["DATABASE_URL"])),
+    service = AuthService(PostgresAuthStore(engine_for(database_url_from_environment())),
                           os.environ["AUTH_HMAC_KEY"].encode("utf-8"))
     if not service.bootstrap(args.username, password):
         parser.error("An owner already exists; bootstrap is disabled")
@@ -41,7 +41,7 @@ def reset_main() -> None:
         with os.fdopen(fd, "w") as output:
             output.write(password + "\n")
     try:
-        service = AuthService(PostgresAuthStore(engine_for(os.environ["DATABASE_URL"])),
+        service = AuthService(PostgresAuthStore(engine_for(database_url_from_environment())),
                               os.environ["AUTH_HMAC_KEY"].encode("utf-8"))
         if not service.reset_password(args.username, password):
             parser.error("Owner not found; no password was changed")

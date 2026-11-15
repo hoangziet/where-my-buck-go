@@ -240,7 +240,7 @@ export default function TransactionsPage() {
   }, [visible]);
 
   return (
-    <main className="flex-1 flex flex-col gap-5 px-4 pb-28 pt-6 lg:px-10 lg:pt-8 lg:pb-12 relative">
+    <main className="flex-1 flex flex-col gap-5 px-4 pb-12 pt-6 lg:px-10 lg:pt-8 lg:pb-12 relative">
       {/* Desktop header */}
       <div className="hidden lg:flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
@@ -494,7 +494,7 @@ export default function TransactionsPage() {
       {lastDeleted && (
         <div
           role="status"
-          className="fixed left-4 right-4 bottom-24 lg:static lg:self-center lg:left-auto lg:right-auto lg:bottom-auto flex items-center justify-between gap-4 bg-ink text-white rounded-xl pl-4 pr-1.5 py-1.5 text-sm shadow-[0_12px_28px_-12px_rgba(22,32,26,0.45)] z-20"
+          className="fixed left-4 right-4 bottom-4 lg:static lg:self-center lg:left-auto lg:right-auto lg:bottom-auto flex items-center justify-between gap-4 bg-ink text-white rounded-xl pl-4 pr-1.5 py-1.5 text-sm shadow-[0_12px_28px_-12px_rgba(22,32,26,0.45)] z-20"
         >
           <span>Deleted &ldquo;{lastDeleted.tx.description}&rdquo;</span>
           <button

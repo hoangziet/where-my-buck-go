@@ -58,6 +58,68 @@ Verify health checks and owner data after restore. Database replacement is destr
 and keep the source backup untouched. Rehearse restores with an isolated Compose project before relying on
 a backup for recovery.
 
+## Production deployment with Docker Compose
+
+Production deployment uses `compose.prod.yml` and targets a single host behind a TLS reverse proxy
+(such as Caddy or Nginx). Production requires an explicit, random `POSTGRES_PASSWORD`, `AUTH_HMAC_KEY`,
+and Cloudflare R2 credentials for evidence storage:
+
+```sh
+# Required environment variables in .env or systemd unit:
+POSTGRES_PASSWORD=your-secure-postgres-password
+AUTH_HMAC_KEY=your-random-hmac-key-at-least-32-bytes
+R2_ACCOUNT_ID=your-cloudflare-account-id
+R2_ACCESS_KEY_ID=your-r2-access-key-id
+R2_SECRET_ACCESS_KEY=your-r2-secret-access-key
+R2_BUCKET_NAME=your-r2-bucket-name
+GEMINI_API_KEY=your-gemini-api-key # optional
+```
+
+Leave `R2_ENDPOINT_URL` unset for Cloudflare R2. It is an optional override used only with an isolated
+S3-compatible test server.
+
+The database password is passed as a separate component and SQLAlchemy builds the connection URL with
+proper escaping, so generated passwords may contain reserved URL characters.
+
+Start the production stack with:
+
+```sh
+docker compose -f compose.prod.yml up -d --build
+```
+
+The production stack:
+- Uses `APP_ENV=production` with secure cookies (`__Host-` prefix, `HttpOnly`, `SameSite=Strict`, `Secure`), HSTS headers, and `ProxyFix` middleware.
+- Stores evidence in private Cloudflare R2 instead of the local filesystem.
+- Sets memory limits (512MB per container), log rotation (`json-file` with 10MB x 3 files max), and `restart: unless-stopped`.
+- Binds frontend only to `127.0.0.1:3000` for reverse proxy termination. Backend and database ports are not published to the host.
+- Migrates the database automatically before backend launch via a one-shot `migrate` service.
+
+On initial production launch, create the owner account with:
+`docker compose -f compose.prod.yml exec backend wmbg-bootstrap owner`
+
+Deploy only after local acceptance and explicit owner approval.
+
+### Production backup and restore
+
+With the production stack healthy and the R2 token configured, create a consistent PostgreSQL plus R2
+evidence backup with `./scripts/backup-production.sh /path/to/encrypted/backups`. The script pauses frontend
+and backend writes, exports and checksum-verifies each database-referenced R2 object, validates the database
+dump/archive, writes an owner-only archive and SHA-256 sidecar, then restarts the app. Keep the archive on
+encrypted off-host storage; keep `.env` and secrets separately.
+
+To replace the production database with a backup, run
+`./scripts/restore-production.sh --confirm-replace-production-data /path/to/backup.tar.gz`. The script
+checks the archive checksum and contents, creates a fresh pre-restore backup, restores PostgreSQL, restores
+the matching R2 objects, then checks service health and `/login`. If recovery fails after the database is
+replaced, it leaves the app stopped and retains the pre-restore backup for operator recovery. Rehearse this
+on an isolated production Compose project before relying on it; a live Cloudflare R2 rehearsal still needs
+the owner's bucket credentials.
+
+These backup commands run on demand. The repository does not install a recurring timer or copy archives to
+off-host storage. Before production launch, choose the recovery-point target and retention period, schedule
+`backup-production.sh` on the host, and copy each archive together with its `.sha256` sidecar to encrypted
+off-host storage. Monitor failures and rehearse restoring a scheduled backup.
+
 ## Run services on the host
 
 For host-based development, use Python 3.10+, Node 20+, and Docker. Start only PostgreSQL with
@@ -69,7 +131,8 @@ then load `.env` with `set -a; source ../.env; set +a` and start Flask with
 `../.venv/bin/flask --app where_my_buck_go.api.app:create_app run --port 5000`.
 In another shell, run `cd frontend && npm ci && npm run dev -- -p 3100` and visit
 http://localhost:3100.
-Local testing takes priority; Oracle deployment only starts after the owner approves the local app.
+Local testing takes priority; production deployment to the selected host starts only after the owner approves
+the local app and deployment target.
 The Gemini adapter can be verified independently without writing financial data. Set `GEMINI_API_KEY`
 in `.env`, load `.env` into the shell, then run `./.venv/bin/wmbg-gemini-smoke` from the repository root.
 The default model is `gemini-3.1-flash-lite` (override with `GEMINI_MODEL`). The command makes one
@@ -101,7 +164,12 @@ version-checked the same as confirm. `GET /api/proposals/<id>` and
 `GET /api/evidence/<id>`. `GET /api/proposals` lists up to 200 open owner drafts, including after a
 page reload. Every proposal requires original `evidenceText`. Missing date stays a
 draft; a missing time receives a marked default. Local evidence lives in private `.local-evidence/`.
-The app refuses to start with filesystem evidence in production until the R2 adapter is available.
+Production uses the S3-compatible Cloudflare R2 adapter. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+`R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME` in the deployment environment; startup fails if any are
+missing. Use a private bucket and a token scoped to that bucket. Evidence objects have UUID keys,
+retain database SHA-256 verification, and are never exposed through public bucket access. The adapter's
+contract is covered by isolated tests; a live R2 upload/restore rehearsal still requires deployment
+credentials and is not represented as verified here.
 
 `POST /api/chat/messages` accepts `{ "text": "...", "history": [], "expectedVersion": 0, "chatId": "..." }`
 (`chatId` optional; a new conversation is created and returned when omitted) with the same session,

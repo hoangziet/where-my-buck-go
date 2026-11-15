@@ -1,0 +1,14 @@
+services:
+  s3mock:
+    image: adobe/s3mock:5.2.2
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: ci-smoke
+    expose:
+      - "9090"
+
+  backend:
+    environment:
+      R2_ENDPOINT_URL: http://s3mock:9090
+    depends_on:
+      s3mock:
+        condition: service_started

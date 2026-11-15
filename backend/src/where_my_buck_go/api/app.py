@@ -11,11 +11,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from where_my_buck_go.adapters.auth_repo import PostgresAuthStore
-from where_my_buck_go.adapters.db import engine_for
+from where_my_buck_go.adapters.db import database_url_from_environment, engine_for
 from where_my_buck_go.adapters.gemini import DEFAULT_MODEL, GeminiClient
 from where_my_buck_go.adapters.history_repo import PostgresHistoryStore
 from where_my_buck_go.adapters.ledger_repo import PostgresLedgerStore
 from where_my_buck_go.adapters.local_evidence import LocalEvidenceStore
+from where_my_buck_go.adapters.r2_evidence import R2EvidenceStore
 from where_my_buck_go.api.ledger import ledger_blueprint
 from where_my_buck_go.services.auth import AuthService, LoginLimitedError, SessionRecord
 from where_my_buck_go.services.chat import ChatService
@@ -31,18 +32,22 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 4_100_000
     is_production = production if production is not None else os.environ.get("APP_ENV") == "production"
+    if is_production:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)  # type: ignore[method-assign]
     cookie_name = "__Host-wmbg_session" if is_production else "wmbg_session"
     csrf_cookie_name = "__Host-wmbg_csrf" if is_production else "wmbg_csrf"
     if service is None:
-        url = os.environ["DATABASE_URL"]
-        engine = engine_for(url)
+        engine = engine_for(database_url_from_environment())
         service = AuthService(PostgresAuthStore(engine), os.environ["AUTH_HMAC_KEY"].encode("utf-8"))
     else:
         engine = None
     if ledger is None and engine is not None:
         root = Path(__file__).resolve().parents[4]
-        directory = Path(os.environ.get("EVIDENCE_DIR", root / ".local-evidence"))
-        ledger = LedgerService(PostgresLedgerStore(engine), LocalEvidenceStore(directory, production=is_production))
+        evidence = (R2EvidenceStore.from_environment() if is_production else
+                    LocalEvidenceStore(Path(os.environ.get("EVIDENCE_DIR", root / ".local-evidence"))))
+        ledger = LedgerService(PostgresLedgerStore(engine), evidence)
     if history is None and engine is not None and ledger is not None:
         history = HistoryService(PostgresHistoryStore(engine), ledger.store)
     if ledger is not None:
