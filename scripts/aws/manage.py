@@ -214,23 +214,67 @@ def seed_secrets(args):
     print('Secrets configured; initial owner credentials saved to .aws-runtime/initial-owner.json (0600)')
 
 
+class RemoteCommandPending(RuntimeError):
+    """Observation ended without evidence that the remote operation finished."""
+
+
+class RemoteCommandFailed(RuntimeError):
+    """Systems Manager reported a terminal failure."""
+
+
 def wait_command(identifier, instance):
     for _ in range(180):
         response = aws('ssm', 'get-command-invocation', '--command-id', identifier,
                        '--instance-id', instance, check=False)
         if response and response['Status'] in ('Success', 'Cancelled', 'Failed', 'TimedOut'):
             if response['Status'] != 'Success':
-                raise RuntimeError(f'SSM command {identifier} failed; inspect protected invocation logs')
+                raise RemoteCommandFailed(f'SSM command {identifier} failed; inspect protected invocation logs')
             print('Remote operation completed')
             return
         time.sleep(5)
-    raise RuntimeError(f'SSM command {identifier} did not finish within 15 minutes')
+    raise RemoteCommandPending(
+        f'SSM command {identifier} is not confirmed finished; use resume-command --command-id {identifier}')
 
 
-def remote(values, shell):
+def observe_command(receipt):
+    """Clean up temporary access only once the remote outcome is known."""
+    terminal = False
+    try:
+        wait_command(receipt['command_id'], receipt['instance_id'])
+        terminal = True
+        if receipt.get('bootstrap_role'):
+            put_parameter(f"/{receipt['project']}/initialized", {'sha': receipt['sha']}, overwrite=True)
+    except RemoteCommandFailed:
+        terminal = True
+        raise
+    finally:
+        if terminal and receipt.get('bootstrap_role'):
+            aws('iam', 'delete-role-policy', '--role-name', receipt['bootstrap_role'],
+                '--policy-name', 'temporary-database-bootstrap')
+
+
+def remote(values, shell, *, bootstrap_role=None, sha=None):
     result = aws('ssm', 'send-command', data={'InstanceIds': [values['instance_id']],
-        'DocumentName': 'AWS-RunShellScript', 'Parameters': {'commands': [shell], 'executionTimeout': ['900']}})
-    wait_command(result['Command']['CommandId'], values['instance_id'])
+        'DocumentName': 'AWS-RunShellScript', 'TimeoutSeconds': 60,
+        'Parameters': {'commands': [shell], 'executionTimeout': ['900']}})
+    identifier = result['Command']['CommandId']
+    receipt = {'command_id': identifier, 'instance_id': values['instance_id'],
+               'account_id': values['account_id'], 'region': values['region'],
+               'project': values['project'], 'bootstrap_role': bootstrap_role, 'sha': sha}
+    save(PRIVATE/'commands'/f'{identifier}.json', receipt)
+    print(f'SSM command: {identifier}', flush=True)
+    observe_command(receipt)
+
+
+def resume_command(args):
+    if not args.command_id or not re.fullmatch(r'[0-9a-f-]{36}', args.command_id):
+        raise ValueError('Provide a valid --command-id from the original operation')
+    receipt = json.loads((PRIVATE/'commands'/f'{args.command_id}.json').read_text())
+    if receipt['region'] != args.region:
+        raise ValueError('Region differs from the original command')
+    if aws('sts', 'get-caller-identity')['Account'] != receipt['account_id']:
+        raise ValueError('Account differs from the original command')
+    observe_command(receipt)
 
 
 def deploy(args):
@@ -280,12 +324,7 @@ flock -n /opt/wmbg/operation.lock python3 /opt/wmbg/releases/{sha}/deploy/aws/ru
                       'Resource': values['database_secret']}]}
             aws('iam', 'put-role-policy', data={'RoleName': values['project']+'-instance',
                 'PolicyName': 'temporary-database-bootstrap', 'PolicyDocument': json.dumps(policy)})
-            try:
-                remote(values, bootstrap)
-                put_parameter(f"/{values['project']}/initialized", {'sha': sha}, overwrite=True)
-            finally:
-                aws('iam', 'delete-role-policy', '--role-name', values['project']+'-instance',
-                    '--policy-name', 'temporary-database-bootstrap')
+            remote(values, bootstrap, bootstrap_role=values['project']+'-instance', sha=sha)
         else:
             remote(values, bootstrap)
             print('Application URL: '+values['public_url'])
@@ -309,7 +348,7 @@ def operational(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['preflight', 'init-state', 'plan', 'apply', 'configure-github',
-                                          'seed-secrets', 'deploy', 'backup', 'rollback', 'restore', 'verify'])
+                                          'seed-secrets', 'deploy', 'backup', 'rollback', 'restore', 'verify', 'resume-command'])
     parser.add_argument('--region', default='ap-southeast-1')
     parser.add_argument('--project', default='wmbg')
     parser.add_argument('--profile')
@@ -319,6 +358,7 @@ def main():
     parser.add_argument('--schema-compatible', action='store_true')
     parser.add_argument('--target-host')
     parser.add_argument('--backup-key')
+    parser.add_argument('--command-id')
     args = parser.parse_args()
     if args.profile:
         os.environ['AWS_PROFILE'] = args.profile
@@ -327,7 +367,7 @@ def main():
     PRIVATE.mkdir(exist_ok=True, mode=0o700)
     handlers = {'preflight': preflight, 'init-state': init_state, 'plan': plan, 'apply': apply,
                 'configure-github': configure_github, 'seed-secrets': seed_secrets, 'deploy': deploy,
-                'backup': operational, 'rollback': operational, 'restore': operational}
+                'backup': operational, 'rollback': operational, 'restore': operational, 'resume-command': resume_command}
     if args.action == 'verify':
         values = outputs()
         for path in ['/api/health', '/login']:

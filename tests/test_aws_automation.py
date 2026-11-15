@@ -133,3 +133,46 @@ def test_preflight_rejects_unavailable_capacity(
     with pytest.raises(RuntimeError, match=expected):
         manager.preflight(SimpleNamespace(region='ap-southeast-1'))
     assert not (tmp_path/'preflight.json').exists()
+
+
+def test_observation_timeout_preserves_bootstrap_access(monkeypatch):
+    calls = []
+    monkeypatch.setattr(manager, 'aws', lambda *a, **kw: calls.append(a))
+
+    def pending(*args):
+        raise manager.RemoteCommandPending('still running')
+
+    monkeypatch.setattr(manager, 'wait_command', pending)
+    with pytest.raises(manager.RemoteCommandPending):
+        manager.observe_command({'command_id': 'id', 'instance_id': 'instance',
+                                 'bootstrap_role': 'temporary-role'})
+    assert calls == []
+
+
+def test_terminal_failure_removes_bootstrap_access(monkeypatch):
+    calls = []
+    monkeypatch.setattr(manager, 'aws', lambda *a, **kw: calls.append(a))
+
+    def failed(*args):
+        raise manager.RemoteCommandFailed('failed')
+
+    monkeypatch.setattr(manager, 'wait_command', failed)
+    with pytest.raises(manager.RemoteCommandFailed):
+        manager.observe_command({'command_id': 'id', 'instance_id': 'instance',
+                                 'bootstrap_role': 'temporary-role'})
+    assert calls == [('iam', 'delete-role-policy', '--role-name', 'temporary-role',
+                      '--policy-name', 'temporary-database-bootstrap')]
+
+
+def test_remote_receipt_is_saved_before_observation(tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, 'PRIVATE', tmp_path)
+    monkeypatch.setattr(manager, 'aws', lambda *a, **kw: {'Command': {'CommandId': 'command-id'}})
+
+    def observe(receipt):
+        assert json.loads((tmp_path/'commands/command-id.json').read_text()) == receipt
+        raise manager.RemoteCommandPending('pending')
+
+    monkeypatch.setattr(manager, 'observe_command', observe)
+    with pytest.raises(manager.RemoteCommandPending):
+        manager.remote({'instance_id': 'instance', 'account_id': 'account',
+                        'region': 'region', 'project': 'project'}, 'true')

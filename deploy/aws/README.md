@@ -85,7 +85,10 @@ and cleanup remain outstanding. Never direct restore at production. Run `manage.
 `--target-host` and `--backup-key` only after those prerequisites exist; verify restored data and
 checksums before removing the isolated targets.
 
-When a command reports an SSM command ID, inspect its authoritative status before retrying. An
-observation timeout does not establish remote failure. Initialization interrupted during observation
-also requires checking whether its temporary IAM policy still exists. Keep `AWS_READY` unset/false
+When a command reports an SSM command ID, continue observing it with
+`manage.py resume-command --command-id ID --profile wmbg-infra` before considering a new execution.
+The protected receipt in `.aws-runtime/commands/` binds observation to its original account and region. An
+observation timeout does not establish remote failure. Initialization keeps temporary IAM access while remote status is unknown; resumed observation removes
+that policy once a terminal result is confirmed. If submission itself fails before returning a command
+ID, inspect SSM and the temporary IAM policy explicitly before retrying. Keep `AWS_READY` unset/false
 until the initial release gates pass; disabling it stops future automated deployments, not the app.
