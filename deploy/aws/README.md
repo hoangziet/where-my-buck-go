@@ -11,7 +11,7 @@ and acceptance gates. Commands below run from the repository root.
 The operator completes AWS login/MFA; no access keys belong in GitHub or the repository.
 
 ```sh
-aws login --profile wmbg --region ap-southeast-1
+aws login --profile wmbg --region ap-southeast-2
 python3 scripts/aws/manage.py preflight --profile wmbg
 ```
 
@@ -20,11 +20,13 @@ configure a credential-process profile and use it for the remaining commands:
 
 ```sh
 aws configure set credential_process 'aws configure export-credentials --profile wmbg --format process' --profile wmbg-infra
-aws configure set region ap-southeast-1 --profile wmbg-infra
+aws configure set region ap-southeast-2 --profile wmbg-infra
 python3 scripts/aws/manage.py preflight --profile wmbg-infra
 python3 scripts/aws/manage.py init-state --profile wmbg-infra
 python3 scripts/aws/manage.py plan --profile wmbg-infra --email YOUR_ALERT_EMAIL
 ```
+
+The current account is under an AWS Organizations service control policy that explicitly denies IAM OIDC provider discovery (`iam:ListOpenIDConnectProviders`) and account contact lookup. Preflight stops before any resource creation. Ask the organization administrator to allow IAM provider/role discovery and Terraform-managed role changes, or provide an existing GitHub OIDC provider ARN and allow the required role changes. Supply the budget alert email via `plan --email` because account-contact lookup is denied.
 
 Inspect the saved Terraform plan, regional prices, account eligibility, and existing resources before
 `apply`. The plan is bound to the account and checked by hash. Never commit `.aws-runtime/`, state,

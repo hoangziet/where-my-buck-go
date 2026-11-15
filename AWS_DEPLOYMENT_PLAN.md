@@ -6,7 +6,7 @@ Status: implementation in progress, 2026-11-15. Terraform, deployment scripts, S
 
 | Component | Selected deployment | Automation and acceptance |
 | --- | --- | --- |
-| Region | Singapore (`ap-southeast-1`) | Explicit provider and CLI regions; verify account eligibility before creating resources. |
+| Region | Sydney (`ap-southeast-2`), matching the account project's selected region | Explicit provider and CLI regions; verify account eligibility before creating resources. |
 | Frontend and backend | One Ubuntu EC2 `t3.small` instance, initially 2 GB RAM, with separate Next.js and Flask containers | Build images in GitHub Actions, deploy immutable image digests, and measure memory before increasing the instance size. |
 | Database | Amazon RDS PostgreSQL 17, Single-AZ, initially `db.t4g.micro` and 20 GB gp3 | Terraform provisions RDS outside Docker, encrypted storage, deletion protection, final snapshots, and seven-day automated backup retention. Check engine/class availability in the target region. |
 | Database network | Private RDS endpoint in a dedicated VPC with two isolated database subnets | Terraform manages dedicated subnet groups, routes, and security groups. Allow PostgreSQL only from the app host; verify TLS certificates. |
@@ -54,9 +54,9 @@ Gemini remains the existing external AI provider. “AWS deployment” covers ho
 
 ## Cost and Owner Involvement
 
-Use a provisional envelope of **USD 40–55/month**, before tax and external Gemini usage, for low traffic. It includes EC2, public IPv4 for outbound access, EBS, RDS compute/storage, CloudFront, S3, ECR, secrets, and monitoring. This is not a regional price quote: refresh prices before applying Terraform. No NAT gateway, load balancer, Multi-AZ standby, or paid domain is included.
+Use a provisional envelope of **USD 45–55/month**, before tax and external Gemini usage, for low traffic. It includes EC2, public IPv4 for outbound access, EBS, RDS compute/storage, CloudFront, S3, ECR, secrets, and monitoring. AWS Pricing API currently reports Sydney Linux EC2 `t3.small` at USD 0.0264/hour (~USD 19.27/month) and RDS PostgreSQL `db.t4g.micro` Single-AZ at USD 0.025/hour (~USD 18.25/month). The remaining envelope covers EBS/RDS storage, public IPv4, CloudFront, S3, ECR, secrets, logs, and backups; refresh those quantities and prices before applying Terraform. No NAT gateway, load balancer, Multi-AZ standby, or paid domain is included.
 
-The owner reports **USD 200 credit**. This represents approximately 3.6–5 months at the provisional envelope, subject to eligibility and expiry. Never silently upgrade the account. Monthly budget alerts are configured for USD 50; they do not cap spending. Credit balance/expiry reporting and regional pricing verification remain pending account access.
+AWS CLI verifies an ACTIVE Free Plan with **USD 200 credit** expiring 2027-05-15. Organization SCP denies `iam:ListOpenIDConnectProviders` and `iam:GetOpenIDConnectProvider`; the account contact email API is also denied. Provisioning is gated until an organization admin grants the Terraform IAM discovery/change permissions or supplies an existing GitHub OIDC provider ARN and allows the required IAM role changes. At the provisional USD 45–55 monthly envelope, the credit covers about 3.6–4.4 months; current regional prices still need to be queried before Terraform apply. Never silently upgrade the account. Monthly budget alerts target USD 50 and do not cap spending.
 
 The owner performs only interactive identity steps that cannot be delegated: approve AWS/GitHub login or MFA if no usable session exists, supply the Gemini credential and owner login through a protected prompt, and confirm an alert subscription if required. The agent prepares and shows the exact resource/cost plan before the initial deployment decision. No routine console setup or per-release manual deployment is intended.
 

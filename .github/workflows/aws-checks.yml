@@ -26,7 +26,7 @@ jobs:
         run: |
           mkdir -p /tmp/wmbg-ci
           touch /tmp/wmbg-ci/app.env /tmp/wmbg-ci/migration.env
-          AWS_REGION=ap-southeast-1 BACKEND_IMAGE=example/backend@sha256:$(printf 'a%.0s' {1..64}) \
+          AWS_REGION=ap-southeast-2 BACKEND_IMAGE=example/backend@sha256:$(printf 'a%.0s' {1..64}) \
           FRONTEND_IMAGE=example/frontend@sha256:$(printf 'b%.0s' {1..64}) \
           PROXY_IMAGE=example/proxy@sha256:$(printf 'd%.0s' {1..64}) \
           TOOLS_IMAGE=example/tools@sha256:$(printf 'c%.0s' {1..64}) \

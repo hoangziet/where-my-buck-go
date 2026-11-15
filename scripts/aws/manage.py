@@ -29,7 +29,15 @@ def command(args, *, payload=None, check=True, capture=True):
                             stdout=subprocess.PIPE if capture else None,
                             stderr=subprocess.PIPE if capture else None)
     if check and result.returncode:
-        # Do not emit request bodies, SQL errors, or secret-bearing SDK responses.
+        # Keep AWS denial errors actionable without surfacing request bodies or credentials.
+        detail = result.stderr or ''
+        if 'explicit deny in a service control policy' in detail.lower():
+            denied = re.search(r'not authorized to perform: ([^ ]+)', detail)
+            action = denied.group(1) if denied else 'the requested AWS action'
+            raise RuntimeError(
+                f'AWS Organizations policy explicitly denies {action}; ask the organization '
+                'administrator to allow the deployment permission or provide the existing resource ARN.'
+            )
         raise RuntimeError(f'{Path(args[0]).name} {args[1]} failed (exit {result.returncode})')
     return result
 
@@ -86,14 +94,27 @@ def preflight(args):
     for tool in ('terraform', 'docker', 'gh'):
         if not shutil.which(tool):
             raise RuntimeError(f'Missing required tool: {tool}')
-    oidc = aws('iam', 'list-open-id-connect-providers')
-    result['github_oidc_provider_arn'] = next((v['Arn'] for v in oidc['OpenIDConnectProviderList']
-                                             if v['Arn'].endswith('/token.actions.githubusercontent.com')), '')
-    database_options = aws('rds', 'describe-orderable-db-instance-options', '--engine', 'postgres',
-                           '--db-instance-class', 'db.t4g.micro')
-    if not any(option['EngineVersion'].split('.')[0] == '17'
-               for option in database_options['OrderableDBInstanceOptions']):
-        raise RuntimeError('PostgreSQL 17 on db.t4g.micro is unavailable in this region')
+    if args.github_oidc_provider_arn:
+        result['github_oidc_provider_arn'] = args.github_oidc_provider_arn
+    else:
+        oidc = aws('iam', 'list-open-id-connect-providers')
+        result['github_oidc_provider_arn'] = next(
+            (v['Arn'] for v in oidc['OpenIDConnectProviderList']
+             if v['Arn'].endswith('/token.actions.githubusercontent.com')), '')
+    engine_versions = aws('rds', 'describe-db-engine-versions', '--engine', 'postgres',
+                          '--engine-version', '17')
+    versions = {entry['EngineVersion'] for entry in engine_versions['DBEngineVersions']}
+    if not versions:
+        raise RuntimeError('PostgreSQL 17 is unavailable in this region')
+    gp3_versions = aws('rds', 'describe-orderable-db-instance-options', '--engine', 'postgres',
+                       '--db-instance-class', 'db.t4g.micro', '--query',
+                       "OrderableDBInstanceOptions[?StorageType=='gp3'].EngineVersion | unique(@)",
+                       '--output', 'json')
+    compatible_versions = versions.intersection(gp3_versions)
+    if not compatible_versions:
+        raise RuntimeError('PostgreSQL 17 on db.t4g.micro with gp3 is unavailable in this region')
+    database_engine_version = max(compatible_versions, key=lambda value: tuple(map(int, value.split('.'))))
+    result['database_engine_version'] = database_engine_version
     compute_options = aws('ec2', 'describe-instance-type-offerings',
                           '--filters', 'Name=instance-type,Values=t3.small')
     if not compute_options['InstanceTypeOfferings']:
@@ -138,7 +159,8 @@ def plan(args):
     if not email:
         raise RuntimeError('Provide --email for AWS cost alerts')
     config = {'region': args.region, 'project': args.project, 'github_repository': REPOSITORY,
-              'budget_email': email, 'github_oidc_provider_arn': inventory['github_oidc_provider_arn']}
+              'budget_email': email, 'github_oidc_provider_arn': inventory['github_oidc_provider_arn'],
+              'database_engine_version': inventory['database_engine_version']}
     save(INFRA/'deployment.auto.tfvars.json', config)
     command(['terraform', f'-chdir={INFRA}', 'plan', '-input=false', '-out=deployment.tfplan'], capture=False)
     save(PRIVATE/'plan-account.json', {'account_id': inventory['account_id'],
@@ -349,7 +371,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['preflight', 'init-state', 'plan', 'apply', 'configure-github',
                                           'seed-secrets', 'deploy', 'backup', 'rollback', 'restore', 'verify', 'resume-command'])
-    parser.add_argument('--region', default='ap-southeast-1')
+    parser.add_argument('--region', default='ap-southeast-2')
     parser.add_argument('--project', default='wmbg')
     parser.add_argument('--profile')
     parser.add_argument('--email')
@@ -359,6 +381,7 @@ def main():
     parser.add_argument('--target-host')
     parser.add_argument('--backup-key')
     parser.add_argument('--command-id')
+    parser.add_argument('--github-oidc-provider-arn')
     args = parser.parse_args()
     if args.profile:
         os.environ['AWS_PROFILE'] = args.profile

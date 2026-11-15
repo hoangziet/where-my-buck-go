@@ -13,7 +13,7 @@ resource "aws_db_parameter_group" "app" {
 resource "aws_db_instance" "app" {
   identifier                   = var.project
   engine                       = "postgres"
-  engine_version               = "17"
+  engine_version               = var.database_engine_version
   instance_class               = "db.t4g.micro"
   allocated_storage            = 20
   storage_type                 = "gp3"

@@ -1,6 +1,6 @@
 variable "region" {
   type    = string
-  default = "ap-southeast-1"
+  default = "ap-southeast-2"
 }
 variable "project" {
   type    = string
@@ -29,4 +29,9 @@ variable "github_oidc_provider_arn" {
   type        = string
   default     = ""
   description = "Supply an existing GitHub OIDC provider ARN to reuse it."
+}
+
+variable "database_engine_version" {
+  type        = string
+  description = "Latest PostgreSQL 17 minor version available for the selected RDS class and region."
 }
