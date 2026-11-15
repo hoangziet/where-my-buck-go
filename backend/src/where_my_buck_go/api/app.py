@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from where_my_buck_go.adapters.auth_repo import PostgresAuthStore
-from where_my_buck_go.adapters.db import engine_for
+from where_my_buck_go.adapters.db import database_url_from_environment, engine_for
 from where_my_buck_go.adapters.gemini import DEFAULT_MODEL, GeminiClient
 from where_my_buck_go.adapters.history_repo import PostgresHistoryStore
 from where_my_buck_go.adapters.ledger_repo import PostgresLedgerStore
@@ -39,8 +39,7 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
     cookie_name = "__Host-wmbg_session" if is_production else "wmbg_session"
     csrf_cookie_name = "__Host-wmbg_csrf" if is_production else "wmbg_csrf"
     if service is None:
-        url = os.environ["DATABASE_URL"]
-        engine = engine_for(url)
+        engine = engine_for(database_url_from_environment())
         service = AuthService(PostgresAuthStore(engine), os.environ["AUTH_HMAC_KEY"].encode("utf-8"))
     else:
         engine = None

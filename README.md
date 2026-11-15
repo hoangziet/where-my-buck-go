@@ -75,6 +75,9 @@ R2_BUCKET_NAME=your-r2-bucket-name
 GEMINI_API_KEY=your-gemini-api-key # optional
 ```
 
+The database password is passed as a separate component and SQLAlchemy builds the connection URL with
+proper escaping, so generated passwords may contain reserved URL characters.
+
 Start the production stack with:
 
 ```sh
