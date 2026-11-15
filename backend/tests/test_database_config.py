@@ -27,3 +27,29 @@ def test_database_url_environment_remains_supported(monkeypatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
     assert database_url_from_environment() == legacy_url
+
+
+def test_aws_database_requires_verified_tls(monkeypatch) -> None:
+    import pytest
+
+    for name in ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD", "DB_SSLMODE", "DB_SSLROOTCERT"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://owner:secret@database/app")
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "s3")
+    with pytest.raises(ValueError, match="verify-full TLS"):
+        database_url_from_environment()
+    monkeypatch.setenv("DB_SSLMODE", "verify-full")
+    monkeypatch.setenv("DB_SSLROOTCERT", "/run/certs/rds.pem")
+    parsed = make_url(database_url_from_environment())
+    assert parsed.query["sslmode"] == "verify-full"
+    assert parsed.query["sslrootcert"] == "/run/certs/rds.pem"
+
+
+def test_database_url_preserves_existing_connection_parameters(monkeypatch) -> None:
+    for name in ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://owner:secret@database/app?connect_timeout=5")
+    monkeypatch.setenv("DB_SSLMODE", "verify-full")
+    monkeypatch.setenv("DB_SSLROOTCERT", "/run/certs/rds.pem")
+    assert make_url(database_url_from_environment()).query["connect_timeout"] == "5"

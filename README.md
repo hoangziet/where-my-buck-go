@@ -60,6 +60,13 @@ a backup for recovery.
 
 ## Production deployment with Docker Compose
 
+The selected AWS target and terminal automation sequence are documented in
+[AWS Deployment Plan](AWS_DEPLOYMENT_PLAN.md). That target uses managed RDS PostgreSQL outside Docker,
+S3 evidence storage, and an AWS-provided HTTPS address. Infrastructure and release automation live in
+`infra/aws/`, `scripts/aws/`, and `compose.aws.yml`; provisioning and live acceptance remain pending.
+Follow the [AWS runbook](deploy/aws/README.md). The legacy `compose.prod.yml` below uses containerized
+PostgreSQL and R2 and is not the AWS deployment profile.
+
 Production deployment uses `compose.prod.yml` and targets a single host behind a TLS reverse proxy
 (such as Caddy or Nginx). Production requires an explicit, random `POSTGRES_PASSWORD`, `AUTH_HMAC_KEY`,
 and Cloudflare R2 credentials for evidence storage:
@@ -192,7 +199,7 @@ every active session, the same as the CLI reset.
 ## Checks
 
 `./.venv/bin/pytest backend/tests -q`, `./.venv/bin/ruff check backend`,
-`./.venv/bin/mypy backend/src/where_my_buck_go`, and from `frontend/`, `npm run lint`, `npm run build`,
+`./.venv/bin/mypy --config-file backend/pyproject.toml backend/src/where_my_buck_go`, and from `frontend/`, `npm run lint`, `npm run build`,
 and `npm run test:e2e` (requires Playwright Chromium; the test command starts the production server).
 
 Python source lives at `backend/src/where_my_buck_go/`. Existing local PostgreSQL databases named

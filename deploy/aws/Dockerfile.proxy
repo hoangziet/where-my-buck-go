@@ -1,0 +1,2 @@
+FROM nginx:stable-alpine
+COPY deploy/aws/nginx.conf /etc/nginx/nginx.conf

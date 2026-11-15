@@ -29,6 +29,9 @@ wmbg-gemini-image-smoke = "where_my_buck_go.gemini_image_smoke:main"
 wmbg-export-r2-evidence = "where_my_buck_go.cli_r2_backup:export_main"
 wmbg-restore-r2-evidence = "where_my_buck_go.cli_r2_backup:restore_main"
 
+wmbg-export-evidence = "where_my_buck_go.cli_r2_backup:export_main"
+wmbg-restore-evidence = "where_my_buck_go.cli_r2_backup:restore_main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["where_my_buck_go*"]
