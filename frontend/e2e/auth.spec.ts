@@ -52,8 +52,14 @@ test("owner can sign in, load the dashboard, and sign out", async ({ page }) => 
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(appNavigation).toBeHidden();
-  await expect(page.locator("nav.fixed[aria-label='App']")).toBeVisible();
+  const mobileNavigation = page.getByRole("navigation", { name: "Mobile app" });
+  await expect(mobileNavigation).toBeVisible();
+  await expect(mobileNavigation.getByRole("link", { name: "Dashboard" })).toBeVisible();
+  await expect(mobileNavigation.getByRole("link", { name: "AI Chat" })).toBeVisible();
+  await expect(mobileNavigation.getByRole("link", { name: "Transactions" })).toBeVisible();
+  await expect(page.locator("nav.fixed")).toHaveCount(0);
   await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(appNavigation).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByLabel("Username")).toBeVisible();

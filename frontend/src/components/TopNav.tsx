@@ -87,7 +87,7 @@ export function TopNav() {
         </div>
       </div>
 
-      <nav aria-label="App" className="flex h-12 items-center gap-1 overflow-x-auto border-t border-border-nav/70 px-3 lg:hidden">
+      <nav aria-label="Mobile app" className="flex h-12 items-center gap-1 overflow-x-auto border-t border-border-nav/70 px-3 lg:hidden">
         {navItems.map((item) => {
           const active = pathname === item.href;
           const Icon = item.icon;
