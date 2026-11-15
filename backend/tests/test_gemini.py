@@ -5,7 +5,8 @@ from typing import Any
 
 import httpx
 import pytest
-from google.genai import errors
+from google import genai
+from google.genai import errors, types
 
 from where_my_buck_go.adapters import gemini
 from where_my_buck_go.adapters.gemini import GeminiClient, GeminiError
@@ -61,6 +62,62 @@ def test_sdk_forces_the_requested_function_and_configures_retries(monkeypatch: p
     assert call_config.allowed_function_names == ["classify_message"]
     assert models.calls[0]["model"] == "gemini-3.1-flash-lite"
     assert "dummy-secret" not in repr(models.calls[0])
+
+
+def test_official_sdk_retries_http_504_before_returning_a_function_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_count = 0
+
+    def respond(_request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        if request_count < 3:
+            return httpx.Response(504, json={"error": {"message": "temporary provider failure"}})
+        return httpx.Response(200, json={
+            "candidates": [{
+                "content": {
+                    "parts": [{"functionCall": {"name": "classify_message", "args": {"kind": "greeting"}}}],
+                    "role": "model",
+                },
+                "finishReason": "STOP",
+                "index": 0,
+            }],
+        })
+
+    original_factory = gemini.genai.Client
+
+    def client_with_mock_transport(**kwargs: object) -> genai.Client:
+        options = kwargs["http_options"]
+        assert isinstance(options, types.HttpOptions)
+        retry = options.retry_options
+        assert retry is not None
+        retry_options = types.HttpRetryOptions(
+            attempts=retry.attempts,
+            initial_delay=0,
+            max_delay=0,
+            jitter=0,
+            http_status_codes=retry.http_status_codes,
+        )
+        http_client = httpx.Client(transport=httpx.MockTransport(respond))
+        return original_factory(
+            api_key=str(kwargs["api_key"]),
+            http_options=types.HttpOptions(
+                timeout=options.timeout,
+                retry_options=retry_options,
+                httpx_client=http_client,
+            ),
+        )
+
+    monkeypatch.setattr(gemini.genai, "Client", client_with_mock_transport)
+    client = GeminiClient("dummy-secret")
+    try:
+        result = client.call_function("Xin chào", "classify_message", SCHEMA)
+    finally:
+        client._client.close()
+
+    assert result == {"kind": "greeting"}
+    assert request_count == 3
 
 
 @pytest.mark.parametrize("response", [
