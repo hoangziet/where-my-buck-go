@@ -297,6 +297,7 @@ def deploy(args):
                      '--image-ids', 'imageTag='+sha)
         images[name] = repository+'@'+result['imageDetails'][0]['imageDigest']
     manifest = {**values, 'sha': sha, 'images': images}
+    PRIVATE.mkdir(exist_ok=True, mode=0o700)
     with tempfile.TemporaryDirectory(dir=PRIVATE) as workdir:
         work = Path(workdir)
         save(work/'release.json', manifest)
