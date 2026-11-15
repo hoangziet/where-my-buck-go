@@ -38,6 +38,14 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 **Acceptance:** a documented deployment and recovery rehearsal succeeds without exposing local data or secrets.
 
+## Remaining Work — Ordered Gates
+
+1. **Validate the current source on GitHub.** The latest successful run is `43360142327` at `dca45f0`; newer local commits have not run in GitHub Actions. Publish the reviewed commits, then require every CI job to pass before calling the branch verified.
+2. **Verify live R2 access.** R2 values are absent from local `.env`. Configure a private bucket and bucket-scoped token locally, then exercise a disposable text and image upload/read/delete and compare their stored SHA-256 values. Keep owner receipts out of this test.
+3. **Prove production recovery.** Add a production backup/restore runbook that covers PostgreSQL and R2 evidence objects, then rehearse it on an isolated production Compose project and verify all restored evidence hashes.
+4. **Prepare the real host.** After the owner selects a domain and host, configure TLS termination, production secrets, firewall rules, and an off-host backup destination. Do not use the local owner's database or evidence volume for this rehearsal.
+5. **Deploy only with explicit owner approval.** Take a verified backup, deploy, check health/login/evidence flows, and verify a tested rollback path before treating production readiness as complete.
+
 ## Current Evidence
 
 - Chat/image retry keys and proposal confirm/discard retry keys are retained for the same user action; failed discard remains visible and retryable.
