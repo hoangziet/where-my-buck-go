@@ -1,6 +1,6 @@
 # AWS Deployment Plan
 
-Status: implementation in progress, 2026-11-15. Terraform, deployment scripts, S3 support, and CI workflows are implemented locally. AWS provisioning and public-URL acceptance remain pending Terraform plan review. Local Docker development remains supported.
+Status: implementation in progress, 2026-11-15. AWS CLI preflight passed, Terraform state storage is bootstrapped, and infrastructure validation passed. A provisional plan showed 54 resources to create and no updates or deletions; its temporary alert address was invalidated. Recreate the saved plan with the owner's real alert email before review and apply. No application infrastructure has been applied. Local Docker development remains supported.
 
 ## Decisions
 
