@@ -6,8 +6,9 @@ resource "aws_db_parameter_group" "app" {
   name_prefix = "${var.project}-"
   family      = "postgres17"
   parameter {
-    name  = "rds.force_ssl"
-    value = "1"
+    name         = "rds.force_ssl"
+    value        = "1"
+    apply_method = "pending-reboot"
   }
 }
 resource "aws_db_instance" "app" {
@@ -26,7 +27,7 @@ resource "aws_db_instance" "app" {
   vpc_security_group_ids       = [aws_security_group.database.id]
   publicly_accessible          = false
   multi_az                     = false
-  backup_retention_period      = 7
+  backup_retention_period      = 1
   backup_window                = "19:00-19:30"
   maintenance_window           = "sun:20:00-sun:21:00"
   auto_minor_version_upgrade   = true
