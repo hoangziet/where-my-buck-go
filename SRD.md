@@ -14,6 +14,11 @@ The web app is the first delivery channel. Telegram is a possible later mileston
 - Evidence: private filesystem storage in local development; an S3-compatible Cloudflare R2 adapter in production. Production startup fails fast if R2 configuration is missing.
 - Deployment: local Docker Compose is supported. Production deployment and a background worker are future work; there is no outbox worker currently.
 
+The selected production target is AWS: Lightsail for the application, managed RDS PostgreSQL outside
+Docker, private S3 evidence storage, and an AWS-provided HTTPS address without a purchased domain.
+[AWS Deployment Plan](AWS_DEPLOYMENT_PLAN.md) defines Terraform, AWS CLI, and GitHub CLI automation,
+cost assumptions, network gates, and release acceptance. This target is planned, not deployed.
+
 Backend responsibilities are separated into `api/` (HTTP, auth, validation), `domain/` (business rules), `services/` (use cases), and `adapters/` (database, Gemini, and evidence integrations). The owner identity comes from the authenticated session, never from request data.
 
 ## Ledger Rules
@@ -38,4 +43,4 @@ Backend responsibilities are separated into `api/` (HTTP, auth, validation), `do
 
 Keep modules cohesive, public Python APIs typed, and TypeScript strict. Cover money, date/time, authorization, idempotency, and draft-confirm behavior with tests. Run the backend tests, Ruff, mypy, frontend lint, and frontend build before reporting a code change as complete.
 
-Implemented local capabilities include authentication, draft/confirm ledger flows, chat, single-image intake, reports, evidence viewing, CSV export, Docker Compose, and an S3-compatible production R2 evidence adapter. Remaining work includes a live R2 rehearsal, production deployment configuration, and any later Telegram integration. Production deployment must wait until the owner approves the local app.
+Implemented local capabilities include authentication, draft/confirm ledger flows, chat, single-image intake, reports, evidence viewing, CSV export, Docker Compose, and an S3-compatible production R2 evidence adapter. Remaining production work follows the AWS deployment plan, including native S3 support, external RDS, automated infrastructure and releases, and a recovery rehearsal. Telegram remains a later integration. Production deployment requires owner authorization for the concrete resource and cost plan.

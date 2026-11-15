@@ -32,7 +32,7 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 ### 4. Production Readiness — In Progress
 
-- Implement and verify production evidence storage (R2), deployment configuration, backups, migrations, health checks, and recovery procedures.
+- Implement the [AWS deployment plan](AWS_DEPLOYMENT_PLAN.md): managed RDS outside Docker, native S3 evidence storage, an AWS-provided HTTPS address, and Terraform/AWS CLI/GitHub CLI automation. Existing R2 recovery checks remain useful regression coverage.
 - Review secrets, cookies, logging, resource limits, and operational monitoring.
 - Deploy only after local acceptance and explicit owner approval.
 
@@ -40,11 +40,11 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 ## Remaining Work — Ordered Gates
 
-1. **Validate the current source on GitHub.** The latest successful run is `43360142327` at `dca45f0`; `origin/main` is still at that commit, and the current local changes have not run in GitHub Actions. Publish the reviewed commits, then require every CI job to pass before calling the branch verified.
-2. **Enforce CI on the main branch.** GitHub currently reports no required status checks. After the new run creates fresh checks, require pull requests and successful `backend`, `frontend`, and `docker-compose` jobs before merging.
-3. **Verify live R2 access.** Configure a private bucket and bucket-scoped token, then exercise disposable text and image upload/read/delete operations and compare SHA-256 values. Keep owner receipts out of this test.
-4. **Prepare a production-like recovery target.** Select a host and domain, configure TLS, production secrets, firewall rules, and off-host encrypted backups. Choose a recovery-point target and retention period, schedule the backup script, monitor failures, and rehearse PostgreSQL and evidence recovery against live R2 without using local owner data.
-5. **Deploy only with explicit owner approval.** Take a verified backup, deploy, check health/login/evidence flows and monitoring, and verify a tested rollback path before treating production readiness as complete.
+1. **Repair GitHub CI.** PR #12 is merged into `main` at `f64bf81`. Run `43668928237` fails its backend job; the PR run reports two unused `type: ignore` comments in `r2_evidence.py`. Frontend and Docker checks pass. Fix the typing/dependency mismatch before deployment.
+2. **Enforce CI on the main branch.** Inspect current protection through `gh api`, then configure pull-request requirements and successful `backend`, `frontend`, and `docker-compose` checks, reporting any account-plan limitations.
+3. **Implement the AWS app profile.** Add AWS S3 support and verified TLS access to external RDS, retaining local Docker development. Automate infrastructure and GitHub setup according to the deployment plan.
+4. **Rehearse the complete AWS path.** Verify the AWS-managed HTTPS address, origin transport, cookies, CSRF, private RDS connectivity, S3 evidence access, backups, and recovery using synthetic data. Present the regional resource/cost plan before provisioning.
+5. **Release with owner authorization.** Deploy the verified commit using the terminal workflow, record the public URL and image digests, and verify monitoring and rollback before treating production readiness as complete.
 
 ## Current Evidence
 
