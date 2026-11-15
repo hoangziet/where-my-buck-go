@@ -2,9 +2,12 @@
 
 ## Current status
 
-Infrastructure and deployment code are available. No production URL, successful restore rehearsal,
-or live deployment is recorded yet. See `AWS_DEPLOYMENT_PLAN.md` for architecture, cost assumptions,
-and acceptance gates. Commands below run from the repository root.
+Production is deployed at https://d1498jatb9ljtb.cloudfront.net from CI-approved `main` commit
+`0221f2d4e8298fd3f3c0ce777202e3e63fa0447e`. Health, login, chat, image draft/evidence retrieval,
+daily archive checksums, and a separate-database restore rehearsal have been verified. The AWS Free
+Plan currently prevents creating a second RDS instance, so the restore rehearsal used a temporary
+database on the existing RDS instance and then removed it. See `AWS_DEPLOYMENT_PLAN.md` for remaining
+acceptance gates. Commands below run from the repository root.
 
 ## Authenticate and provision
 
@@ -83,14 +86,19 @@ python3 scripts/aws/manage.py rollback --schema-compatible --profile wmbg-infra
 
 Review migration compatibility before rollback; it changes application images, never the schema.
 Backups pause application writers and include the database plus referenced evidence and checksums.
-The host timer performs daily backups; failures publish a CloudWatch metric. RDS also retains seven
-days of automated backups. Alert delivery and recovery objectives require live verification.
+The host timer performs daily backups; failures publish a CloudWatch metric. RDS retains one day of
+automated backups to satisfy the account Free Plan limit; encrypted S3 archives retain seven daily
+copies. Backup manifest, database dump, and evidence archive hashes were verified. Alert delivery and
+recovery objectives require live verification.
 
-Archive restore requires a separate empty RDS database, a separate evidence bucket, a protected
-`/wmbg/restore` parameter, and narrowly scoped temporary host permissions. Automated target creation
-and cleanup remain outstanding. Never direct restore at production. Run `manage.py restore` with
-`--target-host` and `--backup-key` only after those prerequisites exist; verify restored data and
-checksums before removing the isolated targets.
+Archive restore requires a separate empty database, a separate evidence bucket, a protected
+`/wmbg/restore` parameter, and narrowly scoped temporary host permissions. A restore rehearsal
+verified a known chat and transaction count using a distinct temporary database on the same RDS
+instance because the account Free Plan blocks a second instance. The test database, protected
+parameter, IAM policy, and bucket were removed afterward. This does not replace a future rehearsal
+against a separate RDS host. Never target the production database. `manage.py restore` rejects the
+production database host; to rehearse on the same instance, use a distinct database and an explicitly
+reviewed temporary copy of the runtime safety guard, then remove all temporary resources.
 
 When a command reports an SSM command ID, continue observing it with
 `manage.py resume-command --command-id ID --profile wmbg-infra` before considering a new execution.

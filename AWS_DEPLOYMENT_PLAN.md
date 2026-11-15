@@ -1,6 +1,6 @@
 # AWS Deployment Plan
 
-Status: implementation in progress, 2026-11-15. AWS CLI preflight passed, Terraform state storage is bootstrapped, and infrastructure validation passed. The saved Terraform plan contains 54 creates, zero updates, and zero deletions. Budget and CloudWatch alerts publish to a secured SNS topic; an email subscription is optional and can be added later. No application infrastructure has been applied. Local Docker development remains supported.
+Status: deployed, 2026-11-15. Production runs in AWS Sydney at https://d1498jatb9ljtb.cloudfront.net from CI-approved `main` commit `0221f2d4e8298fd3f3c0ce777202e3e63fa0447e`. Terraform provisions CloudFront, EC2, private RDS PostgreSQL, S3, ECR, monitoring, and recovery storage. The account's Free Plan permits one RDS instance, so a full second-instance rehearsal was blocked; recovery was instead verified in a temporary, separate database on the production RDS instance and that database and its temporary credentials were removed. Local Docker development remains supported.
 
 ## Decisions
 
@@ -14,7 +14,7 @@ Status: implementation in progress, 2026-11-15. AWS CLI preflight passed, Terraf
 | Public address | CloudFront distribution with a default `*.cloudfront.net` address | Terraform manages the distribution and EC2 VPC origin. AWS manages viewer HTTPS and certificate renewal. No purchased domain or Route 53 hosted zone. |
 | Container registry | Private Amazon ECR repositories | Local AWS CLI session builds and pushes images; the EC2 instance role obtains short-lived registry tokens. Retain tagged releases; expire only untagged images. |
 | Secrets | AWS Systems Manager Parameter Store SecureString; RDS-managed administrator secret where supported | Write values through protected CLI input, never commit them or expose them in CI output. Keep application and migration database permissions separate. |
-| Operations | AWS Budgets, bounded CloudWatch logs/metrics, RDS backups, and an encrypted S3 recovery archive | Provision through Terraform/CLI. Configure retention, usage alerts, and a restore rehearsal. Budget alerts are notifications, not a hard spending cap. |
+| Operations | AWS Budgets, bounded CloudWatch logs/metrics, RDS backups, and an encrypted S3 recovery archive | Provisioned through Terraform/CLI. One-day RDS backups, seven daily S3 archives, and a restore rehearsal are verified. Budget alerts are notifications, not a hard spending cap. |
 
 Gemini remains the existing external AI provider. “AWS deployment” covers hosting and storage; switching the AI model to Amazon Bedrock is outside this iteration.
 
@@ -22,14 +22,14 @@ Gemini remains the existing external AI provider. “AWS deployment” covers ho
 
 | Phase | Work performed by the agent from the terminal | Completion evidence |
 | --- | --- | --- |
-| 0. Repair the release baseline | Fix CI's unused `type: ignore` errors in `r2_evidence.py`; reconcile local and CI typing dependencies. PR #12 has already merged; main run `43668928237` currently fails its backend job. | Backend, frontend, and Docker CI all pass on the exact release commit. |
-| 1. Inspect access and cost | Inspect existing AWS/GitHub authentication with `aws sts get-caller-identity` and `gh auth status`. Check service availability, IAM permissions, credit balance/expiry, VPC quotas and existing resources. Obtain regional prices through AWS pricing APIs. | Account/region inventory, a monthly estimate, and an explicit Terraform resource-change plan. No inferred access from a browser login. |
-| 2. Adapt the app | Add AWS S3 configuration with explicit region and the SDK credential chain; keep the local evidence provider. Add an AWS Compose profile with frontend, backend, proxy, and a one-shot migration job, using external RDS. Update backups for external PostgreSQL and S3. | S3 contract tests, RDS TLS configuration checks, migration checks, and local regression checks pass. AWS Compose contains no database service or database volume. |
-| 3. Define infrastructure | Add `infra/aws/` with pinned Terraform/provider versions, locking, least-privilege IAM, EC2, VPC origin, RDS, S3, ECR, distribution, secrets metadata, budgets, and monitoring. Bootstrap encrypted/versioned S3 state through an idempotent AWS CLI script. | `terraform fmt -check`, validation, and a reviewed saved plan; state access is restricted, and DB/evidence deletion is protected. |
-| 4. Configure GitHub | Use `gh api` to configure repository rules and branch restrictions. GitHub is used for code review and CI only; no AWS credentials or deploy environment are configured there. | Main requires pull requests and successful checks. AWS build/deploy credentials remain in the local short-lived AWS CLI session. |
-| 5. Provision and initialize | Apply the reviewed infrastructure plan from the terminal after deployment authorization. Use scripts to configure Docker, create/attach the AWS URL, install configuration, initialize RDS roles, migrate schema, and bootstrap the owner through protected input. | RDS is private; app containers are healthy; the AWS URL serves login over HTTPS. Start with an empty production database; importing local financial data is a separate explicit action. |
-| 6. Release and verify | From terminal, run the release command against the exact CI-approved `main` commit and exercise login, chat, one-image draft, confirmation, evidence, reports, CSV, and logout with isolated synthetic data. | End-to-end checks run through the actual AWS URL, with no cached private responses, lost cookies, duplicate transactions, or unexpected timeout failures. |
-| 7. Recovery and handover | Rehearse rollback to previous image digests and restore into a separate temporary RDS target; verify referenced S3 object checksums. Remove only the temporary resources. | Record restore duration, recovery commands, released SHA/digests, AWS URL, costs, and backup evidence in the runbook. |
+| 0. Repair the release baseline | Fix CI typing errors and reconcile local and CI typing dependencies. | Complete. Required backend, frontend, and Docker checks passed on release commit `0221f2d4e8298fd3f3c0ce777202e3e63fa0447e`. |
+| 1. Inspect access and cost | Inspect AWS/GitHub authentication, service availability, IAM permissions, credit, quotas, regional prices, and existing resources. | Complete before apply. Account/region inventory and a reviewed resource plan are recorded; the monthly estimate remains provisional and actual usage must be monitored. |
+| 2. Adapt the app | Add AWS S3 configuration, external RDS TLS, an AWS Compose profile, and backup support while retaining local Docker. | Complete. Backend, frontend, Docker, and related checks passed in CI; AWS Compose contains no database service or database volume. |
+| 3. Define infrastructure | Add pinned Terraform/provider versions, restricted state, least-privilege IAM, EC2, private RDS, S3, ECR, CloudFront VPC origin, budgets, and monitoring. | Complete. Terraform formatting, validation, reviewed plan, and protected state/data resources passed before apply. |
+| 4. Configure GitHub | Configure repository rules and required CI through GitHub CLI; GitHub Actions performs CI only. | Complete. PR-based changes and required checks are enforced; AWS deploy credentials remain in the local short-lived AWS CLI session. |
+| 5. Provision and initialize | Apply the reviewed infrastructure plan from the terminal. Configure containers, private RDS, CloudFront URL, migrations, and owner bootstrap. | Complete. RDS is private; health and login endpoints work over HTTPS. No local financial data was imported. |
+| 6. Release and verify | Release the exact CI-approved `main` commit and exercise authenticated product flows using synthetic data. | Partial. Authenticated API login/logout, report summary, chat Q&A, and one-image draft/evidence retrieval were verified through the AWS URL. The synthetic image draft was discarded; transaction count remained zero. Browser confirmation, CSV export, and full origin/cookie acceptance remain to be exercised. |
+| 7. Recovery and handover | Create and verify S3 archives, then rehearse restoring PostgreSQL and evidence in isolation. | Backup object hashes and restore passed. AWS Free Plan blocked a second RDS instance; restore was tested in a distinct temporary database on the existing RDS instance using the exact backup runtime with a guard limited to that separate database. The database, temporary SSM secret, IAM policy, and bucket were removed. This verifies archive restoration but does not exercise recovery to a separate RDS host. Rollback rehearsal remains open. |
 
 ## Terminal Automation Contract
 
@@ -58,7 +58,7 @@ Use a provisional envelope of **USD 45–55/month for this app**, before tax and
 
 Read-only inventory found an existing untagged Aurora PostgreSQL 17.9 Serverless v2 cluster named `database-1`, configured to auto-pause after five minutes; its ownership and purpose are unverified. Its storage encryption and deletion protection are disabled, with one-day backup retention. Leave it untouched and do not use it for application data; the app plan creates its own encrypted RDS PostgreSQL database with deletion protection, one-day automated backups, and seven-day S3 archives. The USD 45–55 estimate excludes any charges from the existing Aurora cluster, so actual account costs may be higher until its owner confirms its purpose or removes it separately.
 
-AWS CLI verifies an ACTIVE Free Plan with **USD 200 credit** expiring 2027-05-15. AWS-managed project policy denies IAM OIDC provider discovery and account contact lookup; project-level permissions cannot override this policy. Deployment therefore uses the local AWS CLI session and does not require GitHub OIDC. At the provisional USD 45–55 monthly envelope, the credit covers about 3.6–4.4 months; remaining storage, network, and log prices still need to be verified before Terraform apply. Never silently upgrade the account. Monthly budget alerts target USD 50 and do not cap spending.
+AWS CLI verifies an ACTIVE Free Plan with **USD 200 credit** expiring 2027-05-15. AWS-managed project policy denies IAM OIDC provider discovery and account contact lookup; project-level permissions cannot override this policy. Deployment therefore uses the local AWS CLI session and does not require GitHub OIDC. At the provisional USD 45–55 monthly envelope, the credit covers about 3.6–4.4 months. Refresh prices and actual usage through AWS billing before relying on that estimate. Never silently upgrade the account. Monthly budget alerts target USD 50 and do not cap spending.
 
 The owner performs only interactive identity steps that cannot be delegated: approve AWS/GitHub login or MFA if no usable session exists, supply the Gemini credential and owner login through a protected prompt, and confirm an alert subscription if required. The agent prepares and shows the exact resource/cost plan before the initial deployment decision. No routine console setup or per-release manual deployment is intended.
 
@@ -75,8 +75,9 @@ The owner performs only interactive identity steps that cannot be delegated: app
 
 ## Remaining Release Gates
 
-- Verify account eligibility, regional pricing, and review the saved Terraform plan before apply.
-- Provision infrastructure, build exact-commit images, initialize RDS, and validate the public URL.
-- Complete authenticated product acceptance and verify backup/rollback on the actual deployment.
-- Automate isolated restore-target provisioning and cleanup; the restore runtime currently requires a separately prepared target database and bucket.
+- Verify current regional prices and monitor actual AWS charges against the $50 monthly budget notification.
+- Exercise browser confirmation, CSV export, secure-cookie/CSRF behavior, and the slow-Gemini path through the public URL with synthetic data.
+- Rehearse image rollback after reviewing migration compatibility.
+- Rehearse restore to a separate RDS host when the account plan permits another RDS instance; current Free Plan quota allows only one.
+- Configure an SNS email subscription if inbox delivery of budget and alarm notifications is required.
 - Keep all AWS credentials local; GitHub Actions performs CI and never deploys to AWS.
