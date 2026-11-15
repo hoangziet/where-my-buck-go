@@ -70,16 +70,10 @@ def parse_transaction_date(value: str | None, received_at: datetime) -> date | N
         return today - timedelta(days=2)
     try:
         if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
-            parsed = date.fromisoformat(value)
-            if parsed > today:
-                raise InvalidTransactionTime("Transaction date must not be in the future")
-            return parsed
+            return date.fromisoformat(value)
         if re.fullmatch(r"[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}", value):
             day, month, year = (int(part) for part in value.split("/"))
-            parsed = date(year, month, day)
-            if parsed > today:
-                raise InvalidTransactionTime("Transaction date must not be in the future")
-            return parsed
+            return date(year, month, day)
     except ValueError:
         pass
     raise InvalidTransactionTime("Date must be explicit YYYY-MM-DD, recognized date, or empty")
