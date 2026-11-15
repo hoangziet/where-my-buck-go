@@ -76,9 +76,19 @@ class GeminiClient:
     @staticmethod
     def _function_args(response: types.GenerateContentResponse, name: str) -> dict[str, object]:
         calls = response.function_calls
-        if not calls or len(calls) != 1 or calls[0].name != name:
+        if not calls:
             raise GeminiError("Gemini returned a different or missing function call")
-        args = calls[0].args
+        matching = [c for c in calls if c.name == name]
+        if not matching:
+            raise GeminiError("Gemini returned a different or missing function call")
+        if name == "parse_transactions" and len(matching) > 1:
+            all_items: list[object] = []
+            for call in matching:
+                args = call.args
+                if isinstance(args, dict) and isinstance(args.get("items"), list):
+                    all_items.extend(args["items"])
+            return {"items": all_items}
+        args = matching[0].args
         if not isinstance(args, dict) or not all(isinstance(key, str) for key in args):
             raise GeminiError("Gemini returned invalid function arguments")
         return args

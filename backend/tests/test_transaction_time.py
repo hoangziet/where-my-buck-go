@@ -54,10 +54,13 @@ def test_missing_date_stays_draft_even_with_default_clock() -> None:
 
 def test_relative_dates_use_original_anchor_not_worker_time() -> None:
     assert resolve_transaction_time("hôm nay", None, None, ANCHOR).occurred_date == date(2026, 11, 9)
+    assert resolve_transaction_time("hom nay", None, None, ANCHOR).occurred_date == date(2026, 11, 9)
     assert resolve_transaction_time("hôm qua", None, None, ANCHOR).occurred_date == date(2026, 11, 8)
+    assert resolve_transaction_time("hom qua", None, None, ANCHOR).occurred_date == date(2026, 11, 8)
     assert resolve_transaction_time("yesterday", None, None, ANCHOR).occurred_date == date(2026, 11, 8)
     year_boundary = datetime(2026, 12, 31, 18, 0, tzinfo=timezone.utc)
     assert resolve_transaction_time("hôm nay", None, None, year_boundary).occurred_date == date(2027, 1, 1)
+    assert resolve_transaction_time("hom nay", "sang", None, ANCHOR).period == "sáng"
 
 
 @pytest.mark.parametrize("date_text,period,clock", [

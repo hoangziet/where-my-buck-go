@@ -31,13 +31,14 @@ def period_for(clock: time) -> Period:
 def parse_period(value: str | None) -> Period | None:
     if value is None:
         return None
-    if value == "sáng":
+    normalized = value.strip().casefold()
+    if normalized in ("sáng", "sang"):
         return "sáng"
-    if value == "trưa":
+    if normalized in ("trưa", "trua"):
         return "trưa"
-    if value == "chiều":
+    if normalized in ("chiều", "chieu"):
         return "chiều"
-    if value == "tối":
+    if normalized in ("tối", "toi"):
         return "tối"
     raise InvalidTransactionTime("Unknown period")
 
@@ -61,9 +62,9 @@ def parse_transaction_date(value: str | None, received_at: datetime) -> date | N
         return None
     normalized = value.strip().casefold()
     today = received_at.astimezone(LOCAL_ZONE).date()
-    if normalized in ("hôm nay", "today"):
+    if normalized in ("hôm nay", "hom nay", "today"):
         return today
-    if normalized in ("hôm qua", "yesterday"):
+    if normalized in ("hôm qua", "hom qua", "yesterday"):
         return today - timedelta(days=1)
     try:
         if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
