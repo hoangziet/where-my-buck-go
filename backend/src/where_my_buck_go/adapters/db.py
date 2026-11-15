@@ -170,7 +170,8 @@ Index("ix_pinned_queries_owner", pinned_queries.c.owner_id)
 def engine_for(url: str, *, connect_args: dict[str, str] | None = None) -> Engine:
     if not url.startswith("postgresql+psycopg://"):
         raise ValueError("DATABASE_URL must use postgresql+psycopg://")
-    engine = create_engine(url, pool_pre_ping=True, connect_args=connect_args or {})
+    engine = create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=2,
+                           pool_timeout=10, connect_args=connect_args or {})
 
     @event.listens_for(engine, "before_cursor_execute")
     def capture_sql(_conn: object, _cursor: object, statement: str, _parameters: object,
@@ -186,17 +187,27 @@ def database_url_from_environment() -> str:
     """Build a safely escaped URL from DB_* components, or use DATABASE_URL."""
     component_names = ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD")
     if not any(name in os.environ for name in component_names):
-        return os.environ["DATABASE_URL"]
+        from sqlalchemy.engine import make_url
 
-    missing = [name for name in component_names if not os.environ.get(name)]
-    if missing:
-        raise ValueError(f"Missing database configuration: {', '.join(missing)}")
-    port = int(os.environ.get("DB_PORT", "5432"))
-    return URL.create(
-        "postgresql+psycopg",
-        username=os.environ["DB_USER"],
-        password=os.environ["DB_PASSWORD"],
-        host=os.environ["DB_HOST"],
-        port=port,
-        database=os.environ["DB_NAME"],
-    ).render_as_string(hide_password=False)
+        url = make_url(os.environ["DATABASE_URL"])
+    else:
+        missing = [name for name in component_names if not os.environ.get(name)]
+        if missing:
+            raise ValueError(f"Missing database configuration: {', '.join(missing)}")
+        url = URL.create(
+            "postgresql+psycopg",
+            username=os.environ["DB_USER"],
+            password=os.environ["DB_PASSWORD"],
+            host=os.environ["DB_HOST"],
+            port=int(os.environ.get("DB_PORT", "5432")),
+            database=os.environ["DB_NAME"],
+        )
+
+    options = {key: os.environ[name] for name, key in (
+        ("DB_SSLMODE", "sslmode"), ("DB_SSLROOTCERT", "sslrootcert"),
+    ) if os.environ.get(name)}
+    url = url.update_query_dict(options)
+    if os.environ.get("APP_ENV") == "production" and os.environ.get("EVIDENCE_PROVIDER") == "s3":
+        if url.query.get("sslmode") != "verify-full" or not url.query.get("sslrootcert"):
+            raise ValueError("AWS production database requires verify-full TLS and an RDS CA certificate")
+    return url.render_as_string(hide_password=False)
