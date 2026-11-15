@@ -52,8 +52,8 @@ The goal is a dependable local web app for the owner. Production deployment is a
 
 - The local Compose stack is running PostgreSQL, Flask, and Next.js. All services report healthy; `/api/health` returns `{"status":"ok"}` and `/login` returns HTTP 200.
 - Core owner journeys have been exercised locally: text and one-image receipt drafts, explicit confirmation/discard, reports, filtered CSV, evidence viewing, chat history, and edit/delete/undo proposals. The live-write Playwright journey passed on an isolated synthetic owner and database.
-- Backend checks pass: 121 pytest cases against disposable PostgreSQL, Ruff, and strict mypy across 30 source files. Frontend lint and production build pass; Playwright passes 9 tests, with its real-write case skipped by default.
-- CI includes PostgreSQL and frontend checks, local Compose owner journeys, local backup/restore verification, production-profile security checks, plus production PostgreSQL/R2 backup and restore against S3Mock. A local rehearsal restored one synthetic evidence object and verified its SHA-256 against the restored database.
+- Backend checks pass: 121 pytest cases against disposable PostgreSQL, Ruff, and strict mypy across 30 source files. `pip-audit` and `npm audit` report no known vulnerabilities; frontend lint and production build pass, and Playwright passes 9 tests with its real-write case skipped by default.
+- CI includes Python and npm vulnerability audits, PostgreSQL and frontend checks, local Compose owner journeys, local backup/restore verification, production-profile security checks, plus production PostgreSQL/R2 backup and restore against S3Mock. A local rehearsal restored one synthetic evidence object and verified its SHA-256 against the restored database.
 - Production configuration includes isolated backend networking, health checks, resource/log limits, secure cookies and proxy handling. `ROADMAP.md` and production runbooks document the remaining release gates.
 
 ### Continuous delivery loop
