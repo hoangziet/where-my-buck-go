@@ -1,13 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LayoutGrid, List, LogOut, MessageCircle, Settings } from "lucide-react";
 import { LogoMark } from "./Logo";
 import { useAuth } from "@/lib/auth-context";
-import * as api from "@/lib/api";
-import type { ChatSummary } from "@/lib/api";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
@@ -18,15 +15,7 @@ const navItems = [
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const activeChatId = useSearchParams().get("id");
   const { username, logout } = useAuth();
-  const [chats, setChats] = useState<ChatSummary[]>([]);
-  const onChatPage = pathname?.startsWith("/chat");
-
-  useEffect(() => {
-    if (!onChatPage) return;
-    api.listChats().then((res) => setChats(res.items)).catch(() => setChats([]));
-  }, [onChatPage, activeChatId]);
 
   async function handleLogout() {
     await logout();
@@ -106,24 +95,6 @@ export function TopNav() {
           );
         })}
       </nav>
-
-      {onChatPage && chats.length > 0 && (
-        <nav aria-label="Recent chats" className="h-10 px-4 lg:px-7 xl:px-10 flex items-center gap-2 overflow-x-auto border-t border-border-nav/70">
-          <span className="shrink-0 text-[11px] font-semibold tracking-wide uppercase text-muted">Recent</span>
-          {chats.map((chat) => (
-            <Link
-              key={chat.id}
-              href={`/chat?id=${chat.id}`}
-              aria-current={chat.id === activeChatId ? "page" : undefined}
-              className={`max-w-52 shrink-0 truncate rounded-full px-3 py-1 no-underline text-xs transition-colors duration-150 hover:bg-[#F4F2EC] hover:text-ink ${
-                chat.id === activeChatId ? "bg-accent-soft-bg text-accent-strong font-medium" : "text-ink-3"
-              }`}
-            >
-              {chat.title}
-            </Link>
-          ))}
-        </nav>
-      )}
     </header>
   );
 }
