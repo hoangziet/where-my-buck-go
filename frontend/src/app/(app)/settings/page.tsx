@@ -35,7 +35,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="flex-1 flex flex-col gap-6 px-4 pb-28 pt-6 lg:px-10 lg:pt-8 lg:pb-12">
+    <main className="flex-1 flex flex-col gap-6 px-4 pb-12 pt-6 lg:px-10 lg:pt-8 lg:pb-12">
       <div className="flex flex-col gap-1">
         <h1 className="m-0 font-display font-semibold text-[32px] tracking-tight">Settings</h1>
         <span className="text-sm text-muted">Signed in as {username}</span>

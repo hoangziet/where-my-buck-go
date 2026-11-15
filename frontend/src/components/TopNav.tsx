@@ -34,14 +34,14 @@ export function TopNav() {
   }
 
   return (
-    <header className="hidden lg:block sticky top-0 z-30 shrink-0 border-b border-border-nav bg-surface">
-      <div className="h-[72px] px-7 xl:px-10 flex items-center gap-8">
-        <Link href="/dashboard" className="flex shrink-0 items-center gap-2.5 no-underline text-ink rounded-lg transition-opacity duration-150 hover:opacity-80">
+    <header className="sticky top-0 z-30 shrink-0 border-b border-border-nav bg-surface">
+      <div className="min-h-16 lg:h-[72px] px-4 lg:px-7 xl:px-10 flex items-center justify-between gap-3 lg:justify-start lg:gap-8">
+        <Link href="/dashboard" className="flex min-w-0 shrink-0 items-center gap-2.5 no-underline text-ink rounded-lg transition-opacity duration-150 hover:opacity-80">
           <LogoMark />
-          <span className="font-display font-bold text-base whitespace-nowrap">Where My Buck Go</span>
+          <span className="font-display font-bold text-sm sm:text-base whitespace-nowrap">Where My Buck Go</span>
         </Link>
 
-        <nav aria-label="App" className="flex h-full flex-1 items-center gap-1">
+        <nav aria-label="App" className="hidden h-full flex-1 items-center gap-1 lg:flex">
           {navItems.map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
@@ -63,11 +63,11 @@ export function TopNav() {
           })}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="w-8 h-8 rounded-full bg-[#E3EDE6] text-accent-strong flex items-center justify-center font-semibold text-xs">
+        <div className="flex shrink-0 items-center gap-1.5 lg:gap-2">
+          <span className="hidden lg:flex w-8 h-8 rounded-full bg-[#E3EDE6] text-accent-strong items-center justify-center font-semibold text-xs">
             {(username ?? "?").slice(0, 2).toUpperCase()}
           </span>
-          <span className="max-w-36 truncate text-sm font-medium">{username}</span>
+          <span className="hidden max-w-36 truncate text-sm font-medium lg:inline">{username}</span>
           <Link
             href="/settings"
             aria-label="Settings"
@@ -87,8 +87,28 @@ export function TopNav() {
         </div>
       </div>
 
+      <nav aria-label="App" className="flex h-12 items-center gap-1 overflow-x-auto border-t border-border-nav/70 px-3 lg:hidden">
+        {navItems.map((item) => {
+          const active = pathname === item.href;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={`flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] px-3 no-underline text-xs transition-colors duration-150 ${
+                active ? "bg-accent-soft-bg text-accent-strong font-semibold" : "text-ink-3 font-medium hover:bg-[#F4F2EC] hover:text-ink"
+              }`}
+            >
+              <Icon size={15} strokeWidth={1.9} />
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
       {onChatPage && chats.length > 0 && (
-        <nav aria-label="Recent chats" className="h-10 px-7 xl:px-10 flex items-center gap-2 overflow-x-auto border-t border-border-nav/70">
+        <nav aria-label="Recent chats" className="h-10 px-4 lg:px-7 xl:px-10 flex items-center gap-2 overflow-x-auto border-t border-border-nav/70">
           <span className="shrink-0 text-[11px] font-semibold tracking-wide uppercase text-muted">Recent</span>
           {chats.map((chat) => (
             <Link
