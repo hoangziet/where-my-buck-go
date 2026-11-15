@@ -29,22 +29,22 @@ def period_for(clock: time) -> Period:
 
 
 def parse_period(value: str | None) -> Period | None:
-    if value is None:
+    if value is None or value == "":
         return None
     normalized = value.strip().casefold()
-    if normalized in ("sáng", "sang"):
+    if normalized in ("sáng", "sang", "morning", "am"):
         return "sáng"
-    if normalized in ("trưa", "trua"):
+    if normalized in ("trưa", "trua", "noon", "lunch", "midday"):
         return "trưa"
-    if normalized in ("chiều", "chieu"):
+    if normalized in ("chiều", "chieu", "afternoon", "pm"):
         return "chiều"
-    if normalized in ("tối", "toi"):
+    if normalized in ("tối", "toi", "evening", "night"):
         return "tối"
     raise InvalidTransactionTime("Unknown period")
 
 
 def parse_clock(value: str) -> time:
-    if not isinstance(value, str) or not re.fullmatch(r"[0-9]{2}:[0-9]{2}", value):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]{1,2}:[0-9]{2}", value):
         raise InvalidTransactionTime("Clock must use 24-hour HH:MM")
     hour, minute = (int(part) for part in value.split(":"))
     if hour >= 24 or minute >= 60:
@@ -53,7 +53,7 @@ def parse_clock(value: str) -> time:
 
 
 def parse_transaction_date(value: str | None, received_at: datetime) -> date | None:
-    """Resolve relative words only against the captured ingress instant, never worker time."""
+    """Resolve ISO date or relative words against the captured ingress instant, never worker time."""
     if received_at.tzinfo is None or received_at.utcoffset() is None:
         raise InvalidTransactionTime("Ingress instant must be timezone-aware")
     if value is not None and not isinstance(value, str):
@@ -62,19 +62,27 @@ def parse_transaction_date(value: str | None, received_at: datetime) -> date | N
         return None
     normalized = value.strip().casefold()
     today = received_at.astimezone(LOCAL_ZONE).date()
-    if normalized in ("hôm nay", "hom nay", "today"):
+    if normalized in ("hôm nay", "hom nay", "today", "nay"):
         return today
-    if normalized in ("hôm qua", "hom qua", "yesterday"):
+    if normalized in ("hôm qua", "hom qua", "yesterday", "qua", "hqua"):
         return today - timedelta(days=1)
+    if normalized in ("hôm kia", "hom kia", "the day before yesterday"):
+        return today - timedelta(days=2)
     try:
         if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
-            return date.fromisoformat(value)
-        if re.fullmatch(r"[0-9]{2}/[0-9]{2}/[0-9]{4}", value):
+            parsed = date.fromisoformat(value)
+            if parsed > today:
+                raise InvalidTransactionTime("Transaction date must not be in the future")
+            return parsed
+        if re.fullmatch(r"[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}", value):
             day, month, year = (int(part) for part in value.split("/"))
-            return date(year, month, day)
+            parsed = date(year, month, day)
+            if parsed > today:
+                raise InvalidTransactionTime("Transaction date must not be in the future")
+            return parsed
     except ValueError:
         pass
-    raise InvalidTransactionTime("Date must be explicit, 'hôm nay', or 'hôm qua'")
+    raise InvalidTransactionTime("Date must be explicit YYYY-MM-DD, recognized date, or empty")
 
 
 @dataclass(frozen=True)
