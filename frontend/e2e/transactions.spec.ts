@@ -58,6 +58,30 @@ async function openTransactions(
   await expect(page.getByRole("row", { name: /Coffee/ })).toBeVisible();
 }
 
+test("mutations read the secure production CSRF cookie", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(document, "cookie", {
+      configurable: true,
+      get: () => "__Host-wmbg_csrf=production-csrf-token",
+    });
+  });
+
+  await openTransactions(page);
+  let csrfHeader = "";
+  await page.route("**/api/proposals/changes", async (route) => {
+    csrfHeader = (await route.request().allHeaders())["x-csrf-token"] ?? "";
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(proposal("edit")),
+    });
+  });
+
+  await page.getByRole("button", { name: "Edit transaction" }).click();
+  await page.getByRole("button", { name: "Review changes" }).click();
+  await expect(page.getByRole("dialog", { name: "Review transaction changes" })).toBeVisible();
+  expect(csrfHeader).toBe("production-csrf-token");
+});
+
 test("type and category filters scope the CSV export and formula-like text stays inert", async ({ page }) => {
   const formulaText = { ...original, id: "transaction-formula", description: "=SUM(1,1)" };
   const income = {

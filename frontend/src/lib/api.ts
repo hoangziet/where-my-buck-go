@@ -9,7 +9,7 @@ export class ApiError extends Error {
 }
 
 function csrfToken(): string {
-  const match = document.cookie.match(/(?:^|; )wmbg_csrf=([^;]*)/);
+  const match = document.cookie.match(/(?:^|; )(?:__Host-)?wmbg_csrf=([^;]*)/);
   return match ? decodeURIComponent(match[1]) : "";
 }
 
