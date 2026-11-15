@@ -118,12 +118,12 @@ def test_preflight_rejects_unavailable_capacity(
     def aws(service, operation, *args, **kwargs):
         if service == 'sts':
             return {'Account': '123456789012'}
-        if service == 'iam':
-            return {'OpenIDConnectProviderList': []}
         if service == 'rds' and operation == 'describe-db-engine-versions':
             return {'DBEngineVersions': [{'EngineVersion': v} for v in database_versions]}
         if service == 'rds':
-            return database_versions if database_versions else []
+            return {'OrderableDBInstanceOptions': [
+                {'EngineVersion': version, 'StorageType': 'gp3'} for version in database_versions
+            ]}
         if service == 'ec2':
             return {'InstanceTypeOfferings': [{}] if compute_available else []}
         pytest.fail('Preflight continued after unavailable capacity')
@@ -133,7 +133,7 @@ def test_preflight_rejects_unavailable_capacity(
     monkeypatch.setattr(manager, 'gh', lambda *a: {'permissions': {'admin': True}})
     monkeypatch.setattr(manager.shutil, 'which', lambda tool: '/usr/bin/' + tool)
     with pytest.raises(RuntimeError, match=expected):
-        manager.preflight(SimpleNamespace(region='ap-southeast-2', github_oidc_provider_arn=''))
+        manager.preflight(SimpleNamespace(region='ap-southeast-2'))
     assert not (tmp_path/'preflight.json').exists()
 
 
@@ -185,5 +185,5 @@ def test_aws_org_policy_denial_is_actionable(monkeypatch):
 
     monkeypatch.setattr(manager.subprocess, 'run', lambda *a, **kw: SimpleNamespace(
         returncode=254, stderr='not authorized to perform: iam:ListOpenIDConnectProviders with an explicit deny in a service control policy', stdout=''))
-    with pytest.raises(RuntimeError, match='organization administrator'):
+    with pytest.raises(RuntimeError, match='AWS-managed project policy'):
         manager.command(['aws', 'iam'])
