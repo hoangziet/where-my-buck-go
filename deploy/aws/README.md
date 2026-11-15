@@ -22,15 +22,20 @@ configure a credential-process profile and use it for the remaining commands:
 aws configure set credential_process 'aws configure export-credentials --profile wmbg --format process' --profile wmbg-infra
 aws configure set region ap-southeast-2 --profile wmbg-infra
 python3 scripts/aws/manage.py preflight --profile wmbg-infra
-python3 scripts/aws/manage.py init-state --profile wmbg-infra
-python3 scripts/aws/manage.py plan --profile wmbg-infra --email YOUR_ALERT_EMAIL
 ```
 
-The current account has zero IAM OIDC providers. Its AWS Organizations service control policy explicitly denies provider discovery (`iam:ListOpenIDConnectProviders`, `iam:GetOpenIDConnectProvider`) and account contact lookup, so preflight stops before any resource creation. Ask the organization administrator to permit creating the GitHub OIDC provider and the Terraform-managed IAM roles, policies, and instance profile. Supply the budget alert email via `plan --email` because account-contact lookup is denied.
+AWS Free Plan project policy denies IAM OIDC provider discovery, so AWS deployment runs from this local short-lived CLI session. GitHub Actions runs CI only and receives no AWS credentials. Supply the budget alert email via `plan --email` because account-contact lookup is denied.
 
 Inspect the saved Terraform plan, regional prices, account eligibility, and existing resources before
 `apply`. The plan is bound to the account and checked by hash. Never commit `.aws-runtime/`, state,
 plan files, or generated variable files. Do not upgrade the AWS account automatically.
+
+```sh
+python3 scripts/aws/manage.py init-state --profile wmbg-infra
+python3 scripts/aws/manage.py plan --profile wmbg-infra --email YOUR_ALERT_EMAIL
+```
+
+Review the Terraform plan and cost assumptions before applying. After approval:
 
 ```sh
 python3 scripts/aws/manage.py apply --profile wmbg-infra
@@ -44,9 +49,9 @@ Do not import local financial records as part of initialization.
 
 ## Initial release
 
-Merge the reviewed PR through GitHub after required checks succeed. The workflow must exist on `main`.
-Dispatch `aws-deploy.yml` using `gh workflow run aws-deploy.yml --ref main`; inspect its run with
-`gh run view`. With `AWS_READY` unset, this builds images but does not deploy them.
+Merge the reviewed PR through GitHub after required checks succeed. AWS deploy runs from the local
+terminal after that merge. The command verifies that the exact clean commit is on `main` and its
+required CI checks passed, then builds and pushes immutable images from this machine.
 
 Check out the exact, clean main commit whose images passed the build. Then run:
 
@@ -63,11 +68,7 @@ secret. The public URL is printed after deployment. Health/login checks alone ar
 Validate login/logout, secure cookies, CSRF, chat, one image plus text, draft confirmation,
 idempotent submission, evidence retrieval, reports, and CSV through the AWS URL with synthetic data.
 Confirm private origin isolation and slow Gemini response handling. Record the release SHA and image
-digests. After acceptance, enable subsequent releases:
-
-```sh
-gh variable set AWS_READY --body true --repo hoangziet/where-my-buck-go
-```
+digests. Repeat the same terminal release commands for future releases; GitHub Actions remains CI-only.
 
 ## Recovery and failures
 
@@ -92,5 +93,5 @@ When a command reports an SSM command ID, continue observing it with
 The protected receipt in `.aws-runtime/commands/` binds observation to its original account and region. An
 observation timeout does not establish remote failure. Initialization keeps temporary IAM access while remote status is unknown; resumed observation removes
 that policy once a terminal result is confirmed. If submission itself fails before returning a command
-ID, inspect SSM and the temporary IAM policy explicitly before retrying. Keep `AWS_READY` unset/false
-until the initial release gates pass; disabling it stops future automated deployments, not the app.
+ID, inspect SSM and the temporary IAM policy explicitly before retrying. Deployment remains a deliberate
+local terminal action and is never triggered by a GitHub push.

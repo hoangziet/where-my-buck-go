@@ -24,10 +24,10 @@ REPOSITORY = 'hoangziet/where-my-buck-go'
 AWS = shutil.which('aws') or str(Path.home()/'.local/bin/aws')
 
 
-def command(args, *, payload=None, check=True, capture=True):
+def command(args, *, payload=None, check=True, capture=True, env=None):
     result = subprocess.run(args, input=payload, text=True, check=False,
                             stdout=subprocess.PIPE if capture else None,
-                            stderr=subprocess.PIPE if capture else None)
+                            stderr=subprocess.PIPE if capture else None, env=env)
     if check and result.returncode:
         # Keep AWS denial errors actionable without surfacing request bodies or credentials.
         detail = result.stderr or ''
@@ -35,8 +35,8 @@ def command(args, *, payload=None, check=True, capture=True):
             denied = re.search(r'not authorized to perform: ([^ ]+)', detail)
             action = denied.group(1) if denied else 'the requested AWS action'
             raise RuntimeError(
-                f'AWS Organizations policy explicitly denies {action}; ask the organization '
-                'administrator to allow the deployment permission or provide the existing resource ARN.'
+                f'An AWS-managed project policy explicitly denies {action}. This permission '
+                'cannot be changed from the project account; keep deployment in the local AWS CLI session.'
             )
         raise RuntimeError(f'{Path(args[0]).name} {args[1]} failed (exit {result.returncode})')
     return result
@@ -94,22 +94,15 @@ def preflight(args):
     for tool in ('terraform', 'docker', 'gh'):
         if not shutil.which(tool):
             raise RuntimeError(f'Missing required tool: {tool}')
-    if args.github_oidc_provider_arn:
-        result['github_oidc_provider_arn'] = args.github_oidc_provider_arn
-    else:
-        oidc = aws('iam', 'list-open-id-connect-providers')
-        result['github_oidc_provider_arn'] = next(
-            (v['Arn'] for v in oidc['OpenIDConnectProviderList']
-             if v['Arn'].endswith('/token.actions.githubusercontent.com')), '')
     engine_versions = aws('rds', 'describe-db-engine-versions', '--engine', 'postgres',
                           '--engine-version', '17')
     versions = {entry['EngineVersion'] for entry in engine_versions['DBEngineVersions']}
     if not versions:
         raise RuntimeError('PostgreSQL 17 is unavailable in this region')
-    gp3_versions = aws('rds', 'describe-orderable-db-instance-options', '--engine', 'postgres',
-                       '--db-instance-class', 'db.t4g.micro', '--query',
-                       "OrderableDBInstanceOptions[?StorageType=='gp3'].EngineVersion | unique(@)",
-                       '--output', 'json')
+    options = aws('rds', 'describe-orderable-db-instance-options', '--engine', 'postgres',
+                  '--db-instance-class', 'db.t4g.micro')
+    gp3_versions = {entry['EngineVersion'] for entry in options['OrderableDBInstanceOptions']
+                    if entry['StorageType'] == 'gp3'}
     compatible_versions = versions.intersection(gp3_versions)
     if not compatible_versions:
         raise RuntimeError('PostgreSQL 17 on db.t4g.micro with gp3 is unavailable in this region')
@@ -158,8 +151,8 @@ def plan(args):
         email = contact.get('ContactInformation', {}).get('EmailAddress') if contact else None
     if not email:
         raise RuntimeError('Provide --email for AWS cost alerts')
-    config = {'region': args.region, 'project': args.project, 'github_repository': REPOSITORY,
-              'budget_email': email, 'github_oidc_provider_arn': inventory['github_oidc_provider_arn'],
+    config = {'region': args.region, 'project': args.project,
+              'budget_email': email,
               'database_engine_version': inventory['database_engine_version']}
     save(INFRA/'deployment.auto.tfvars.json', config)
     command(['terraform', f'-chdir={INFRA}', 'plan', '-input=false', '-out=deployment.tfplan'], capture=False)
@@ -192,20 +185,7 @@ def configure_github(args):
                        'required_status_checks': [{'context': name} for name in
                            ['backend', 'frontend', 'docker-compose', 'aws-infrastructure']]}}]}
     gh(base+'/rulesets'+('/'+str(rule['id']) if rule else ''), 'PUT' if rule else 'POST', body)
-    gh(base+'/environments/production', 'PUT', {'deployment_branch_policy': {
-        'protected_branches': False, 'custom_branch_policies': True}})
-    policies = gh(base+'/environments/production/deployment-branch-policies')['branch_policies']
-    if not any(p['name'] == 'main' for p in policies):
-        gh(base+'/environments/production/deployment-branch-policies', 'POST', {'name': 'main', 'type': 'branch'})
-    if (PRIVATE/'deployment.json').exists():
-        values = json.loads((PRIVATE/'deployment.json').read_text())
-        for name, value in {'AWS_REGION': values['region'], 'AWS_BUILD_ROLE': values['build_role'],
-                            'AWS_DEPLOY_ROLE': values['deploy_role'],
-                            'AWS_DEPLOYMENT': json.dumps(values, separators=(',', ':'))}.items():
-            existing = command(['gh', 'api', base+'/actions/variables/'+name], check=False)
-            gh(base+'/actions/variables'+('/'+name if existing.returncode == 0 else ''),
-               'PATCH' if existing.returncode == 0 else 'POST', {'name': name, 'value': value})
-    print('GitHub main protection and production environment configured')
+    print('GitHub main pull-request and CI protections configured')
 
 
 def seed_secrets(args):
@@ -308,6 +288,11 @@ def deploy(args):
         raise ValueError('Release bundle checkout must match the image commit')
     if command(['git', 'status', '--porcelain', '--', 'compose.aws.yml', 'deploy/aws']).stdout.strip():
         raise ValueError('Commit deployment files before releasing')
+    command([sys.executable, str(ROOT/'scripts/aws/check_release.py'), sha], capture=False)
+    environment = os.environ.copy()
+    environment['AWS_DEPLOYMENT'] = json.dumps(values, separators=(',', ':'))
+    environment['RELEASE_SHA'] = sha
+    command([sys.executable, str(ROOT/'scripts/aws/build_images.py')], capture=False, env=environment)
     images = {}
     for name, repository in values['repositories'].items():
         result = aws('ecr', 'describe-images', '--repository-name', f"{values['project']}/{name}",
@@ -381,7 +366,6 @@ def main():
     parser.add_argument('--target-host')
     parser.add_argument('--backup-key')
     parser.add_argument('--command-id')
-    parser.add_argument('--github-oidc-provider-arn')
     args = parser.parse_args()
     if args.profile:
         os.environ['AWS_PROFILE'] = args.profile

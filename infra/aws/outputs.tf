@@ -11,8 +11,6 @@ output "deployment" {
     recovery_bucket = aws_s3_bucket.storage["recovery"].id
     releases_bucket = aws_s3_bucket.storage["releases"].id
     repositories    = { for key, repo in aws_ecr_repository.app : key => repo.repository_url }
-    build_role      = aws_iam_role.github["build"].arn
-    deploy_role     = aws_iam_role.github["deploy"].arn
     public_url      = "https://${aws_cloudfront_distribution.app.domain_name}"
     public_host     = aws_cloudfront_distribution.app.domain_name
     distribution_id = aws_cloudfront_distribution.app.id
