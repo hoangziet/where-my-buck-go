@@ -1,6 +1,6 @@
 # AWS Deployment Plan
 
-Status: deployed, 2026-11-15. Production runs in AWS Sydney at https://d1498jatb9ljtb.cloudfront.net from CI-approved `main` commit `0221f2d4e8298fd3f3c0ce777202e3e63fa0447e`. Terraform provisions CloudFront, EC2, private RDS PostgreSQL, S3, ECR, monitoring, and recovery storage. The account's Free Plan permits one RDS instance, so a full second-instance rehearsal was blocked; recovery was instead verified in a temporary, separate database on the production RDS instance and that database and its temporary credentials were removed. Local Docker development remains supported.
+Status: deployed with a production frontend blocker under remediation, 2026-11-15. Production runs in AWS Sydney at https://d1498jatb9ljtb.cloudfront.net from CI-approved `main` commit `0221f2d4e8298fd3f3c0ce777202e3e63fa0447e`. Terraform provisions CloudFront, EC2, private RDS PostgreSQL, S3, ECR, monitoring, and recovery storage. The frontend currently reads the local CSRF cookie name but not the secure production `__Host-wmbg_csrf` name, so UI mutations fail with HTTP 403; PR #16 fixes the cookie lookup. The account's Free Plan permits one RDS instance, so a full second-instance rehearsal was blocked; recovery was verified in a temporary, separate database on the production RDS instance and all temporary restore resources were removed. Local Docker development remains supported.
 
 ## Decisions
 
@@ -28,7 +28,7 @@ Gemini remains the existing external AI provider. “AWS deployment” covers ho
 | 3. Define infrastructure | Add pinned Terraform/provider versions, restricted state, least-privilege IAM, EC2, private RDS, S3, ECR, CloudFront VPC origin, budgets, and monitoring. | Complete. Terraform formatting, validation, reviewed plan, and protected state/data resources passed before apply. |
 | 4. Configure GitHub | Configure repository rules and required CI through GitHub CLI; GitHub Actions performs CI only. | Complete. PR-based changes and required checks are enforced; AWS deploy credentials remain in the local short-lived AWS CLI session. |
 | 5. Provision and initialize | Apply the reviewed infrastructure plan from the terminal. Configure containers, private RDS, CloudFront URL, migrations, and owner bootstrap. | Complete. RDS is private; health and login endpoints work over HTTPS. No local financial data was imported. |
-| 6. Release and verify | Release the exact CI-approved `main` commit and exercise authenticated product flows using synthetic data. | Partial. Authenticated API login/logout, report summary, chat Q&A, and one-image draft/evidence retrieval were verified through the AWS URL. The synthetic image draft was discarded; transaction count remained zero. Browser confirmation, CSV export, and full origin/cookie acceptance remain to be exercised. |
+| 6. Release and verify | Release the exact CI-approved `main` commit and exercise authenticated product flows using synthetic data. | Partial. Authenticated API login/logout and read-only report/transaction retrieval passed. A direct API chat and one-image draft/evidence request were verified; the image draft was discarded and the ledger remained empty. Browser confirmation, CSV export, and full origin/cookie acceptance remain open. A production cookie-name mismatch blocks all frontend mutations until PR #16 is reviewed, merged, and released. |
 | 7. Recovery and handover | Create and verify S3 archives, then rehearse restoring PostgreSQL and evidence in isolation. | Backup object hashes and restore passed. AWS Free Plan blocked a second RDS instance; restore was tested in a distinct temporary database on the existing RDS instance using the exact backup runtime with a guard limited to that separate database. The database, temporary SSM secret, IAM policy, and bucket were removed. This verifies archive restoration but does not exercise recovery to a separate RDS host. Rollback rehearsal remains open. |
 
 ## Terminal Automation Contract
@@ -76,7 +76,7 @@ The owner performs only interactive identity steps that cannot be delegated: app
 ## Remaining Release Gates
 
 - Verify current regional prices and monitor actual AWS charges against the $50 monthly budget notification.
-- Exercise browser confirmation, CSV export, secure-cookie/CSRF behavior, and the slow-Gemini path through the public URL with synthetic data.
+- Review, merge, and release PR #16, then exercise browser confirmation/discard, CSV export, secure cookies/CSRF, and slow Gemini handling through the public URL with synthetic data.
 - Rehearse image rollback after reviewing migration compatibility.
 - Rehearse restore to a separate RDS host when the account plan permits another RDS instance; current Free Plan quota allows only one.
 - Configure an SNS email subscription if inbox delivery of budget and alarm notifications is required.

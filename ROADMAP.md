@@ -59,6 +59,7 @@ The goal is a dependable owner-operated app. Local development remains supported
 
 - Production URL: https://d1498jatb9ljtb.cloudfront.net. Release commit: `0221f2d4e8298fd3f3c0ce777202e3e63fa0447e`.
 - Health, authenticated API login/logout, report summary, chat Q&A, one-image draft/evidence retrieval, and zero active transactions were verified. Synthetic receipt intake was discarded without writing to the ledger.
+- Production currently blocks frontend mutations because the app does not read the secure `__Host-wmbg_csrf` cookie; PR #16 fixes this. Do not treat UI write flows as accepted until that release is deployed and rechecked.
 - Daily PostgreSQL/evidence backup objects were downloaded and matched their manifest SHA-256 values. Restore produced one chat, two messages, the known QA message, and zero transactions; evidence restore verified zero objects.
 - A separate-database restore rehearsal used a temporary database on the same RDS host because the AWS Free Plan rejected creation of another RDS instance. The temporary database, SecureString parameter, IAM policy, and S3 bucket were deleted. Production health/login checks still pass.
 

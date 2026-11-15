@@ -3,11 +3,14 @@
 ## Current status
 
 Production is deployed at https://d1498jatb9ljtb.cloudfront.net from CI-approved `main` commit
-`0221f2d4e8298fd3f3c0ce777202e3e63fa0447e`. Health, login, chat, image draft/evidence retrieval,
-daily archive checksums, and a separate-database restore rehearsal have been verified. The AWS Free
-Plan currently prevents creating a second RDS instance, so the restore rehearsal used a temporary
-database on the existing RDS instance and then removed it. See `AWS_DEPLOYMENT_PLAN.md` for remaining
-acceptance gates. Commands below run from the repository root.
+`0221f2d4e8298fd3f3c0ce777202e3e63fa0447e`. Health, API login/logout, read-only reports/transactions,
+daily archive checksums, and a separate-database restore rehearsal have been verified. Direct API chat
+and image intake also passed, but the frontend currently looks for `wmbg_csrf` while production sets
+`__Host-wmbg_csrf`; UI mutations therefore fail with HTTP 403. PR #16 fixes the cookie lookup and must
+be released before browser write-flow acceptance. The AWS Free Plan currently prevents creating a
+second RDS instance, so the restore rehearsal used a temporary database on the existing RDS instance
+and then removed it. See `AWS_DEPLOYMENT_PLAN.md` for remaining acceptance gates. Commands below run
+from the repository root.
 
 ## Authenticate and provision
 
