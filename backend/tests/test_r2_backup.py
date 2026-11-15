@@ -2,13 +2,19 @@
 
 import hashlib
 import io
+import json
 import tarfile
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
-from where_my_buck_go.adapters.r2_backup import EvidenceObject, export_evidence_archive, restore_evidence_archive
+from where_my_buck_go.adapters.r2_backup import (
+    ARCHIVE_FORMAT,
+    EvidenceObject,
+    export_evidence_archive,
+    restore_evidence_archive,
+)
 
 
 def test_r2_evidence_archive_round_trips_and_verifies_every_object(tmp_path: Path) -> None:
@@ -60,6 +66,35 @@ def test_restore_refuses_archive_from_a_different_database(tmp_path: Path) -> No
     restored: list[str] = []
     with pytest.raises(ValueError, match="does not match the restored database"):
         restore_evidence_archive([changed], str(archive_path), lambda key, *_args: restored.append(key))
+    assert restored == []
+
+
+def test_restore_validates_all_objects_before_writing_anything(tmp_path: Path) -> None:
+    source = [("00000000-0000-0000-0000-000000000001", b"valid receipt"),
+              ("00000000-0000-0000-0000-000000000002", b"another receipt")]
+    catalog = [EvidenceObject(key, "text", hashlib.sha256(content).digest()) for key, content in source]
+    archive_path = tmp_path / "corrupt-evidence.tar"
+    manifest = {
+        "format": ARCHIVE_FORMAT,
+        "items": [
+            {"storage_key": item.storage_key, "kind": item.kind, "sha256": item.digest.hex()}
+            for item in catalog
+        ],
+    }
+    with tarfile.open(archive_path, "w") as archive:
+        manifest_bytes = json.dumps(manifest, separators=(",", ":"), sort_keys=True).encode()
+        manifest_info = tarfile.TarInfo("manifest.json")
+        manifest_info.size = len(manifest_bytes)
+        archive.addfile(manifest_info, io.BytesIO(manifest_bytes))
+        for index, (key, content) in enumerate(source):
+            stored_content = b"tampered receipt" if index == 1 else content
+            info = tarfile.TarInfo(f"objects/{key}")
+            info.size = len(stored_content)
+            archive.addfile(info, io.BytesIO(stored_content))
+
+    restored: list[str] = []
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        restore_evidence_archive(catalog, str(archive_path), lambda key, *_args: restored.append(key))
     assert restored == []
 
 

@@ -80,7 +80,8 @@ def restore_evidence_archive(
         for member in members:
             if not member.isfile():
                 raise ValueError("R2 evidence archive contains a non-file entry")
-        for item in entries:
+
+        def read_verified_content(item: EvidenceObject) -> bytes:
             member = archive.getmember(f"objects/{item.storage_key}")
             max_size = _size_limit(item.kind)
             if member.size < 1 or member.size > max_size:
@@ -92,7 +93,12 @@ def restore_evidence_archive(
             _validate_content(item.kind, content)
             if hashlib.sha256(content).digest() != item.digest:
                 raise ValueError(f"Evidence checksum mismatch: {item.storage_key}")
-            write_content(item.storage_key, item.kind, content, item.digest)
+            return content
+
+        for item in entries:
+            read_verified_content(item)
+        for item in entries:
+            write_content(item.storage_key, item.kind, read_verified_content(item), item.digest)
     return len(entries)
 
 
