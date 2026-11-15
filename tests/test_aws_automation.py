@@ -104,3 +104,32 @@ def test_deployment_rejects_bundle_from_another_commit_before_ecr(monkeypatch):
     monkeypatch.setattr(manager, 'aws', lambda *a, **kw: pytest.fail('Unexpected AWS call'))
     with pytest.raises(ValueError, match='checkout must match'):
         manager.deploy(SimpleNamespace(sha='a' * 40))
+
+
+@pytest.mark.parametrize('database_versions,compute_available,expected', [
+    (['16.6'], True, 'PostgreSQL 17'),
+    (['17.7'], False, 'EC2 t3.small'),
+])
+def test_preflight_rejects_unavailable_capacity(
+    tmp_path, monkeypatch, database_versions, compute_available, expected,
+):
+    from types import SimpleNamespace
+
+    def aws(service, operation, *args, **kwargs):
+        if service == 'sts':
+            return {'Account': '123456789012'}
+        if service == 'iam':
+            return {'OpenIDConnectProviderList': []}
+        if service == 'rds':
+            return {'OrderableDBInstanceOptions': [{'EngineVersion': v} for v in database_versions]}
+        if service == 'ec2':
+            return {'InstanceTypeOfferings': [{}] if compute_available else []}
+        pytest.fail('Preflight continued after unavailable capacity')
+
+    monkeypatch.setattr(manager, 'PRIVATE', tmp_path)
+    monkeypatch.setattr(manager, 'aws', aws)
+    monkeypatch.setattr(manager, 'gh', lambda *a: {'permissions': {'admin': True}})
+    monkeypatch.setattr(manager.shutil, 'which', lambda tool: '/usr/bin/' + tool)
+    with pytest.raises(RuntimeError, match=expected):
+        manager.preflight(SimpleNamespace(region='ap-southeast-1'))
+    assert not (tmp_path/'preflight.json').exists()

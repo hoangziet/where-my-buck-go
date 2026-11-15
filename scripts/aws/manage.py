@@ -89,9 +89,15 @@ def preflight(args):
     oidc = aws('iam', 'list-open-id-connect-providers')
     result['github_oidc_provider_arn'] = next((v['Arn'] for v in oidc['OpenIDConnectProviderList']
                                              if v['Arn'].endswith('/token.actions.githubusercontent.com')), '')
-    aws('rds', 'describe-orderable-db-instance-options', '--engine', 'postgres',
-        '--db-instance-class', 'db.t4g.micro', '--max-items', '5')
-    aws('ec2', 'describe-instance-type-offerings', '--filters', 'Name=instance-type,Values=t3.small')
+    database_options = aws('rds', 'describe-orderable-db-instance-options', '--engine', 'postgres',
+                           '--db-instance-class', 'db.t4g.micro')
+    if not any(option['EngineVersion'].split('.')[0] == '17'
+               for option in database_options['OrderableDBInstanceOptions']):
+        raise RuntimeError('PostgreSQL 17 on db.t4g.micro is unavailable in this region')
+    compute_options = aws('ec2', 'describe-instance-type-offerings',
+                          '--filters', 'Name=instance-type,Values=t3.small')
+    if not compute_options['InstanceTypeOfferings']:
+        raise RuntimeError('EC2 t3.small is unavailable in this region')
     # Free Plan services/region restrictions must be resolved before creating resources.
     result['account_plan'] = aws('freetier', 'get-account-plan-state', check=False)
     save(PRIVATE/'preflight.json', result)
