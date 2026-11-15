@@ -11,13 +11,13 @@ The web app is the first delivery channel. Telegram is a possible later mileston
 - Backend: Python, Flask, SQLAlchemy, and PostgreSQL with versioned Alembic migrations.
 - Frontend: Next.js, React, and TypeScript. The frontend and backend run as separate services in local Docker Compose; the Next.js frontend proxies API requests to the backend.
 - AI: Gemini structured function calls for chat routing and receipt extraction. The backend validates model output; the model cannot execute SQL or confirm ledger changes.
-- Evidence: private filesystem storage in local development; an S3-compatible Cloudflare R2 adapter in production. Production startup fails fast if R2 configuration is missing.
+- Evidence: private filesystem storage in local development; AWS S3 in the AWS deployment, with the Cloudflare R2 adapter retained for legacy deployments. Production startup validates the selected evidence provider configuration.
 - Deployment: local Docker Compose is supported. Production deployment and a background worker are future work; there is no outbox worker currently.
 
 The selected production target is AWS: EC2 and CloudFront for the application, managed RDS PostgreSQL outside
 Docker, private S3 evidence storage, and an AWS-provided HTTPS address without a purchased domain.
 [AWS Deployment Plan](AWS_DEPLOYMENT_PLAN.md) defines Terraform, AWS CLI, and GitHub CLI automation,
-cost assumptions, network gates, and release acceptance. This target is planned, not deployed.
+cost assumptions, network gates, and release acceptance. Infrastructure and deployment automation are implemented; cloud provisioning and public-URL acceptance remain pending.
 
 Backend responsibilities are separated into `api/` (HTTP, auth, validation), `domain/` (business rules), `services/` (use cases), and `adapters/` (database, Gemini, and evidence integrations). The owner identity comes from the authenticated session, never from request data.
 
