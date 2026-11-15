@@ -96,3 +96,17 @@ test("a 401 from a mid-session API call redirects to login with an explanation",
   await expect(page).toHaveURL(/\/login\?expired=1$/);
   await expect(page.getByText("Your session expired. Please sign in again.")).toBeVisible();
 });
+
+test("login page shows Google sign-in option and displays errors from query params", async ({ page }) => {
+  await page.route("**/api/auth/me", (route) => route.fulfill({
+    status: 401,
+    contentType: "application/json",
+    body: JSON.stringify({ error: "Authentication required" }),
+  }));
+
+  await page.goto("/login?error=Google%20sign-in%20was%20cancelled%20or%20failed");
+  const googleBtn = page.getByRole("link", { name: "Sign in with Google" });
+  await expect(googleBtn).toBeVisible();
+  await expect(googleBtn).toHaveAttribute("href", "/api/auth/google");
+  await expect(page.locator("p[role='alert']")).toHaveText("Google sign-in was cancelled or failed");
+});

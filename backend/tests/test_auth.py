@@ -23,6 +23,12 @@ class MemoryAuthStore:
         self.users[username] = UserRecord("owner-1", username, password_hash)
         return True
 
+    def create_user(self, username: str, password_hash: str, now: datetime) -> UserRecord:
+        user_id = f"user-{len(self.users) + 1}"
+        record = UserRecord(user_id, username, password_hash)
+        self.users[username] = record
+        return record
+
     def reset_password(self, username: str, password_hash: str, now: datetime) -> bool:
         user = self.users.get(username)
         if user is None:
@@ -37,7 +43,8 @@ class MemoryAuthStore:
         return count < 10
 
     def create_session(self, user_id: str, token_digest: bytes, csrf_digest: bytes, expiry: datetime) -> None:
-        self.sessions[token_digest] = SessionRecord(user_id, "owner", csrf_digest, expiry)
+        username = next((u.username for u in self.users.values() if u.id == user_id), "owner")
+        self.sessions[token_digest] = SessionRecord(user_id, username, csrf_digest, expiry)
 
     def find_session(self, token_digest: bytes, now: datetime) -> SessionRecord | None:
         session = self.sessions.get(token_digest)
@@ -170,4 +177,90 @@ def test_production_proxy_fix_resolves_client_ip(setup: tuple[AuthService, Memor
                 headers={"X-Forwarded-For": "203.0.113.195"})
     expected_digest = hmac.digest(service.hmac_key, b"203.0.113.195", "sha256")
     assert expected_digest in store.attempts
+
+
+def test_oauth_login_or_register(setup: tuple[AuthService, MemoryAuthStore]) -> None:
+    service, store = setup
+    result = service.login_or_register_oauth("user@example.com")
+    assert result.username == "user@example.com"
+    assert result.token
+    assert result.csrf
+
+    result2 = service.login_or_register_oauth("user@example.com")
+    assert result2.username == "user@example.com"
+    assert len(store.users) == 2
+
+    session = service.session(result2.token)
+    assert session is not None
+    assert session.username == "user@example.com"
+
+
+def test_google_auth_routes(setup: tuple[AuthService, MemoryAuthStore]) -> None:
+    import re
+
+    import httpx
+
+    from where_my_buck_go.adapters.google_auth import GoogleAuthClient
+
+    service, store = setup
+
+    # 1. Unconfigured client
+    unconfigured_app = create_app(service, google_auth=GoogleAuthClient("", ""))
+    client = unconfigured_app.test_client()
+    resp = client.get("/api/auth/google")
+    assert resp.status_code == 302
+    assert "error=Google%20Sign-In%20is%20not%20configured" in resp.headers["Location"]
+
+    # 2. Mock transport for Google OAuth
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/token":
+            return httpx.Response(200, json={"access_token": "mock-token", "id_token": "mock-id-token"})
+        if request.url.path == "/oauth2/v3/userinfo":
+            return httpx.Response(200, json={"email": "googleuser@example.com", "email_verified": True})
+        if request.url.path == "/tokeninfo":
+            return httpx.Response(
+                200, json={"email": "googleuser@example.com", "email_verified": True, "aud": "test-client-id"}
+            )
+        return httpx.Response(404)
+
+    mock_transport = httpx.MockTransport(handler)
+    google_client = GoogleAuthClient("test-client-id", "test-secret", transport=mock_transport)
+    app = create_app(service, google_auth=google_client)
+    client = app.test_client()
+
+    # GET /api/auth/google initiates auth and sets state cookie
+    start_resp = client.get("/api/auth/google")
+    assert start_resp.status_code == 302
+    assert "accounts.google.com" in start_resp.headers["Location"]
+    assert "state=" in start_resp.headers["Location"]
+    cookie_header = start_resp.headers.get("Set-Cookie", "")
+    assert "wmbg_oauth_state=" in cookie_header
+
+    match = re.search(r"wmbg_oauth_state=([^;]+)", cookie_header)
+    assert match
+    state = match.group(1)
+
+    # Callback with missing or invalid state fails
+    bad_cb = client.get("/api/auth/google/callback?code=mock-code&state=wrong-state")
+    assert bad_cb.status_code == 302
+    assert "error=Invalid%20or%20expired%20authentication%20session" in bad_cb.headers["Location"]
+
+    # Callback with valid state succeeds
+    good_cb = client.get(f"/api/auth/google/callback?code=mock-code&state={state}")
+    assert good_cb.status_code == 302
+    assert good_cb.headers["Location"] == "/dashboard"
+    cb_cookies = good_cb.headers.get_all("Set-Cookie")
+    assert any("wmbg_session=" in c for c in cb_cookies)
+
+    # Calling /api/auth/me with session
+    me_resp = client.get("/api/auth/me")
+    assert me_resp.status_code == 200
+    assert me_resp.json["username"] == "googleuser@example.com"
+
+    # POST /api/auth/google with valid credential from a fresh (unauthenticated) client
+    fresh_client = app.test_client()
+    post_resp = fresh_client.post("/api/auth/google", json={"credential": "mock-id-token"})
+    assert post_resp.status_code == 200
+    assert post_resp.json["username"] == "googleuser@example.com"
+    assert post_resp.json["csrfToken"]
 

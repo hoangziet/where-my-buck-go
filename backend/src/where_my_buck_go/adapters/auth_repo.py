@@ -29,6 +29,13 @@ class PostgresAuthStore(AuthStore):
                                               created_at=now))
         return True
 
+    def create_user(self, username: str, password_hash: str, now: datetime) -> UserRecord:
+        user_id = str(uuid4())
+        with self.engine.begin() as conn:
+            conn.execute(insert(users).values(id=user_id, username=username, password_hash=password_hash,
+                                              created_at=now))
+        return UserRecord(user_id, username, password_hash)
+
     def reset_password(self, username: str, password_hash: str, now: datetime) -> bool:
         with self.engine.begin() as conn:
             user_id = conn.execute(select(users.c.id).where(users.c.username == username)).scalar_one_or_none()
