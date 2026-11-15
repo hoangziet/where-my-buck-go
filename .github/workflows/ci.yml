@@ -161,6 +161,54 @@ jobs:
           RUN_LIVE_E2E: "1"
           E2E_OWNER_USERNAME: live-ci-owner
           E2E_OWNER_PASSWORD: ci-only-password-2026
+      - name: Smoke test the production Compose profile
+        env:
+          POSTGRES_PASSWORD: ci-prod-smoke-password
+          AUTH_HMAC_KEY: ci-only-auth-key-with-at-least-thirty-two-bytes
+          R2_ACCOUNT_ID: ci-smoke
+          R2_ACCESS_KEY_ID: ci-smoke
+          R2_SECRET_ACCESS_KEY: ci-smoke
+          R2_BUCKET_NAME: ci-smoke
+        run: |
+          set -euo pipefail
+          docker compose -p wmbg-production-smoke -f compose.prod.yml up -d --build --wait --wait-timeout 180
+          docker compose -p wmbg-production-smoke -f compose.prod.yml exec -T backend python -c 'from where_my_buck_go.adapters.auth_repo import PostgresAuthStore; from where_my_buck_go.adapters.db import engine_for; from where_my_buck_go.services.auth import AuthService; import os; assert AuthService(PostgresAuthStore(engine_for(os.environ["DATABASE_URL"])), os.environ["AUTH_HMAC_KEY"].encode()).bootstrap("smoke-owner", "prod-smoke-password-123")'
+          python3 - <<'PY'
+          import json
+          import urllib.request
+
+          health = urllib.request.urlopen("http://127.0.0.1:3000/api/health", timeout=5)
+          assert json.loads(health.read()) == {"status": "ok"}
+          assert health.headers.get("Strict-Transport-Security") == "max-age=63072000; includeSubDomains"
+          login = urllib.request.Request(
+              "http://127.0.0.1:3000/api/auth/login",
+              data=json.dumps({"username": "smoke-owner", "password": "prod-smoke-password-123"}).encode(),
+              headers={"Content-Type": "application/json"},
+          )
+          response = urllib.request.urlopen(login, timeout=5)
+          assert response.status == 200
+          cookies = response.headers.get_all("Set-Cookie") or []
+          session_cookie = next(cookie for cookie in cookies if cookie.startswith("__Host-wmbg_session="))
+          csrf_cookie = next(cookie for cookie in cookies if cookie.startswith("__Host-wmbg_csrf="))
+          assert "Secure" in session_cookie and "HttpOnly" in session_cookie and "SameSite=Strict" in session_cookie
+          assert "Secure" in csrf_cookie and "SameSite=Strict" in csrf_cookie and "HttpOnly" not in csrf_cookie
+          print("Production health, HSTS, and authentication cookie checks passed")
+          PY
+          backend_container="$(docker compose -p wmbg-production-smoke -f compose.prod.yml ps -q backend)"
+          backend_ports="$(docker inspect --format '{{json .NetworkSettings.Ports}}' "$backend_container")"
+          BACKEND_PORTS="$backend_ports" python3 -c 'import json, os; assert json.loads(os.environ["BACKEND_PORTS"])["5000/tcp"] is None'
+          frontend_container="$(docker compose -p wmbg-production-smoke -f compose.prod.yml ps -q frontend)"
+          test "$(docker port "$frontend_container" 3000/tcp)" = "127.0.0.1:3000"
+      - name: Remove the production smoke-test stack
+        if: always()
+        env:
+          POSTGRES_PASSWORD: ci-prod-smoke-password
+          AUTH_HMAC_KEY: ci-only-auth-key-with-at-least-thirty-two-bytes
+          R2_ACCOUNT_ID: ci-smoke
+          R2_ACCESS_KEY_ID: ci-smoke
+          R2_SECRET_ACCESS_KEY: ci-smoke
+          R2_BUCKET_NAME: ci-smoke
+        run: docker compose -p wmbg-production-smoke -f compose.prod.yml down -v --remove-orphans
       - name: Stop the stack
         if: always()
         run: docker compose -f compose.local.yml down
