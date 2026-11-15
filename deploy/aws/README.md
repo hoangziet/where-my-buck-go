@@ -26,7 +26,7 @@ python3 scripts/aws/manage.py init-state --profile wmbg-infra
 python3 scripts/aws/manage.py plan --profile wmbg-infra --email YOUR_ALERT_EMAIL
 ```
 
-The current account is under an AWS Organizations service control policy that explicitly denies IAM OIDC provider discovery (`iam:ListOpenIDConnectProviders`) and account contact lookup. Preflight stops before any resource creation. Ask the organization administrator to allow IAM provider/role discovery and Terraform-managed role changes, or provide an existing GitHub OIDC provider ARN and allow the required role changes. Supply the budget alert email via `plan --email` because account-contact lookup is denied.
+The current account has zero IAM OIDC providers. Its AWS Organizations service control policy explicitly denies provider discovery (`iam:ListOpenIDConnectProviders`, `iam:GetOpenIDConnectProvider`) and account contact lookup, so preflight stops before any resource creation. Ask the organization administrator to permit creating the GitHub OIDC provider and the Terraform-managed IAM roles, policies, and instance profile. Supply the budget alert email via `plan --email` because account-contact lookup is denied.
 
 Inspect the saved Terraform plan, regional prices, account eligibility, and existing resources before
 `apply`. The plan is bound to the account and checked by hash. Never commit `.aws-runtime/`, state,
