@@ -14,7 +14,7 @@ The web app is the first delivery channel. Telegram is a possible later mileston
 - Evidence: private filesystem storage in local development; an S3-compatible Cloudflare R2 adapter in production. Production startup fails fast if R2 configuration is missing.
 - Deployment: local Docker Compose is supported. Production deployment and a background worker are future work; there is no outbox worker currently.
 
-The selected production target is AWS: Lightsail for the application, managed RDS PostgreSQL outside
+The selected production target is AWS: EC2 and CloudFront for the application, managed RDS PostgreSQL outside
 Docker, private S3 evidence storage, and an AWS-provided HTTPS address without a purchased domain.
 [AWS Deployment Plan](AWS_DEPLOYMENT_PLAN.md) defines Terraform, AWS CLI, and GitHub CLI automation,
 cost assumptions, network gates, and release acceptance. This target is planned, not deployed.

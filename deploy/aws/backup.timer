@@ -1,0 +1,8 @@
+[Unit]
+Description=Daily Where My Buck Go recovery archive
+[Timer]
+OnCalendar=*-*-* 18:00:00 UTC
+Persistent=true
+Unit=wmbg-backup.service
+[Install]
+WantedBy=timers.target

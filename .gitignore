@@ -15,3 +15,14 @@ frontend/playwright-report/
 .env
 .local-evidence/
 .backups/
+
+# AWS deployment state and private runtime inputs
+infra/aws/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+infra/aws/backend.hcl
+infra/aws/*.auto.tfvars
+infra/aws/outputs.json
+.aws-runtime/
+infra/aws/*.auto.tfvars.json

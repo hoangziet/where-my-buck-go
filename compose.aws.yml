@@ -1,0 +1,71 @@
+x-app: &app
+  restart: unless-stopped
+  logging:
+    driver: awslogs
+    options:
+      awslogs-region: ${AWS_REGION:?Set AWS_REGION}
+      awslogs-group: /${AWS_PROJECT:-wmbg}/app
+      mode: non-blocking
+      max-buffer-size: 4m
+
+services:
+  backend:
+    <<: *app
+    image: ${BACKEND_IMAGE:?Set an immutable backend image digest}
+    env_file: ${AWS_APP_ENV_FILE:-/opt/wmbg/app.env}
+    environment:
+      APP_ENV: production
+      EVIDENCE_PROVIDER: s3
+      DB_SSLMODE: verify-full
+      DB_SSLROOTCERT: /run/certs/rds.pem
+    volumes:
+      - /opt/wmbg/certs/rds.pem:/run/certs/rds.pem:ro
+    ports:
+      - '127.0.0.1:5000:5000'
+    mem_limit: 768m
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+  frontend:
+    <<: *app
+    image: ${FRONTEND_IMAGE:?Set an immutable frontend image digest}
+    environment:
+      NODE_ENV: production
+      BACKEND_ORIGIN: http://backend:5000
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 512m
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+  migrate:
+    image: ${BACKEND_IMAGE:?Set an immutable backend image digest}
+    profiles: [maintenance]
+    env_file: ${AWS_MIGRATION_ENV_FILE:-/opt/wmbg/migration.env}
+    environment:
+      APP_ENV: production
+      EVIDENCE_PROVIDER: s3
+      DB_SSLMODE: verify-full
+      DB_SSLROOTCERT: /run/certs/rds.pem
+    volumes:
+      - /opt/wmbg/certs/rds.pem:/run/certs/rds.pem:ro
+    command: [alembic, upgrade, head]
+    restart: 'no'
+  proxy:
+    <<: *app
+    image: ${PROXY_IMAGE:?Set an immutable proxy image digest}
+    network_mode: host
+    command: [nginx, -g, 'daemon off;']
+    volumes:
+      - ./deploy/aws/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+    mem_limit: 96m

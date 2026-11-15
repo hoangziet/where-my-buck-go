@@ -1,0 +1,68 @@
+name: AWS deployment
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: aws-production
+  cancel-in-progress: false
+jobs:
+  build:
+    if: >-
+      vars.AWS_BUILD_ROLE != '' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+      id-token: write
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+      - name: Require successful checks on the exact main commit
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha="$(git rev-parse HEAD)"
+          python3 scripts/aws/check_release.py "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ vars.AWS_BUILD_ROLE }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Build immutable release images
+        env:
+          AWS_DEPLOYMENT: ${{ vars.AWS_DEPLOYMENT }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: python3 scripts/aws/build_images.py
+  deploy:
+    needs: build
+    if: vars.AWS_READY == 'true'
+    environment: production
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Deploy tested image digests through Systems Manager
+        env:
+          AWS_DEPLOYMENT: ${{ vars.AWS_DEPLOYMENT }}
+        run: python3 scripts/aws/manage.py deploy --region '${{ vars.AWS_REGION }}' --sha '${{ needs.build.outputs.sha }}'
