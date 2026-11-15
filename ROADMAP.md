@@ -36,14 +36,15 @@ The goal is a dependable owner-operated app. Local development remains supported
 - Production is deployed at the AWS CloudFront URL using managed RDS outside Docker, native S3 evidence storage, and Terraform/AWS CLI/GitHub CLI automation.
 - Verify operational behavior through the public URL with synthetic data and record remaining browser acceptance.
 
-**Acceptance:** core hosted flows and backup restoration are verified without exposing local data or secrets; browser confirmation, CSV export, rollback, and restore to a separate RDS host remain open.
+**Acceptance:** core hosted flows and backup restoration are verified without exposing local data or secrets; live-data CSV export, Gemini timeout handling, rollback rehearsal, and restore to a separate RDS host remain open.
 
 ## Remaining Work — Ordered Gates
 
-1. **Complete public-browser acceptance.** Verify explicit transaction confirmation/discard, CSV export, secure cookies, CSRF, and slow Gemini handling through the live URL with synthetic data.
-2. **Rehearse rollback.** Review migration compatibility, then verify rollback to previous image digests without changing the database.
-3. **Rehearse cross-instance recovery.** The AWS Free Plan currently permits only one RDS instance. Repeat restore against a separate RDS host when the account plan permits it; current archive restore was verified in a distinct temporary database on the existing instance.
-4. **Finish operational handover.** Review actual AWS charges against the budget notification; add an SNS email subscription if inbox delivery is desired.
+1. **Verify live-data CSV export.** Test live-data CSV export without retaining synthetic financial records. Prefer an isolated disposable owner/database if feasible; otherwise ask before creating and confirming a production transaction.
+2. **Verify Gemini slow/timeout and error handling.** Verify Gemini slow/timeout behavior and user-facing retry/error handling without accidental duplicate drafts. Begin with deterministic fault-injection tests in an isolated environment to avoid unnecessary paid Gemini calls.
+3. **Rehearse rollback.** Review migration compatibility, then verify image rollback to previous digests without changing the database (the runtime does not roll back schema automatically).
+4. **Rehearse cross-instance recovery.** The AWS Free Plan currently permits only one RDS instance. Repeat restore against a separate RDS host when the account plan permits it; archive restore was verified in a distinct temporary database on the existing RDS host.
+5. **Finish operational handover and cost monitoring.** Review actual AWS charges against the $50 budget notification and decide whether an SNS email subscription is needed (Cost Explorer showed $0 for 2026-11-01 through 2026-11-16; billing data can lag).
 
 ## Current Evidence
 
@@ -57,11 +58,12 @@ The goal is a dependable owner-operated app. Local development remains supported
 
 ### Verified in AWS
 
-- Production URL: https://d1498jatb9ljtb.cloudfront.net. Release commit: `0221f2d4e8298fd3f3c0ce777202e3e63fa0447e`.
-- Health, authenticated API login/logout, report summary, chat Q&A, one-image draft/evidence retrieval, and zero active transactions were verified. Synthetic receipt intake was discarded without writing to the ledger.
-- Production currently blocks frontend mutations because the app does not read the secure `__Host-wmbg_csrf` cookie; PR #16 fixes this. Do not treat UI write flows as accepted until that release is deployed and rechecked.
-- Daily PostgreSQL/evidence backup objects were downloaded and matched their manifest SHA-256 values. Restore produced one chat, two messages, the known QA message, and zero transactions; evidence restore verified zero objects.
-- A separate-database restore rehearsal used a temporary database on the same RDS host because the AWS Free Plan rejected creation of another RDS instance. The temporary database, SecureString parameter, IAM policy, and S3 bucket were deleted. Production health/login checks still pass.
+- Production URL: https://d1498jatb9ljtb.cloudfront.net. Release commit: `cc07b0f92d65a0451c68f24378a9cffcdca51f39`.
+- Health endpoint returned HTTP 200 and `{"status":"ok"}` on 2026-11-16.
+- PR #16 (production CSRF cookie fix) and PR #15 (deployment status documentation) are merged and deployed. Required `backend`, `frontend`, `docker-compose`, and `aws-infrastructure` checks passed on the release commit.
+- Authenticated production checks passed for login/logout, reports and transaction reads, secure `__Host-wmbg_csrf` cookie, and a CSRF-protected synthetic draft that was discarded. No transaction was confirmed; the active ledger remained empty.
+- Public-browser login/logout passed. CSV download and contents passed in the production UI with a browser-only fixture because the production ledger is empty and the export button is disabled when there are no rows.
+- Daily PostgreSQL/evidence backup objects were downloaded and matched their manifest SHA-256 values. Restore rehearsal into a separate temporary database on the existing RDS host passed; all temporary restore resources were removed.
 
 ### Continuous delivery loop
 

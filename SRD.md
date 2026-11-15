@@ -18,9 +18,10 @@ The selected production target is AWS: EC2 and CloudFront for the application, m
 Docker, private S3 evidence storage, and an AWS-provided HTTPS address without a purchased domain.
 [AWS Deployment Plan](AWS_DEPLOYMENT_PLAN.md) defines Terraform, AWS CLI, and GitHub CLI automation,
 cost assumptions, network gates, and release acceptance. Production is deployed at
-https://d1498jatb9ljtb.cloudfront.net. API login/logout, report summary, chat, one-image draft/evidence,
-backup hashes, and a separate-database restore rehearsal have passed. Browser confirmation, CSV export,
-rollback, and a restore to a separate RDS host remain open acceptance work.
+https://d1498jatb9ljtb.cloudfront.net. Authenticated API and browser login/logout, report reads,
+secure CSRF cookie handling, a discarded synthetic draft, backup hashes, and a separate-database
+restore rehearsal have passed. Live-data CSV export, Gemini timeout handling, rollback rehearsal,
+and a restore to a separate RDS host remain open acceptance work.
 
 Backend responsibilities are separated into `api/` (HTTP, auth, validation), `domain/` (business rules), `services/` (use cases), and `adapters/` (database, Gemini, and evidence integrations). The owner identity comes from the authenticated session, never from request data.
 
