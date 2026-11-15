@@ -371,6 +371,10 @@ def test_chat_qa_owner_scoping_and_ambiguous_fallback(
     response = chat_post(client, csrf, question)
     assert response.json["kind"] == "qa"
     assert response.json["totals"] == {"income": "0", "expense": "17500"}
+    assert response.json["categories"] == {"bills": "17500"}
+    assert '"category_expenses_vnd"' in model.calls[1][1]
+    assert '"bills": "17500"' in model.calls[1][1]
+    assert '"Nap data"' in model.calls[1][1]
     other_response = chat_post(other, other_csrf, question)
     assert other_response.json["totals"] == {"income": "0", "expense": "0"}
     assert identifier not in model.calls[-1][1]
