@@ -24,7 +24,7 @@ aws configure set region ap-southeast-2 --profile wmbg-infra
 python3 scripts/aws/manage.py preflight --profile wmbg-infra
 ```
 
-AWS Free Plan project policy denies IAM OIDC provider discovery, so AWS deployment runs from this local short-lived CLI session. GitHub Actions runs CI only and receives no AWS credentials. Supply the budget alert email via `plan --email` because account-contact lookup is denied.
+AWS Free Plan project policy denies IAM OIDC provider discovery, so AWS deployment runs from this local short-lived CLI session. GitHub Actions runs CI only and receives no AWS credentials. Budget alerts publish to the operations SNS topic; pass `--email ADDRESS` to add an email subscription now, or add one later by re-running the plan after supplying the address.
 
 Inspect the saved Terraform plan, regional prices, account eligibility, and existing resources before
 `apply`. The plan is bound to the account and checked by hash. Never commit `.aws-runtime/`, state,
@@ -32,7 +32,7 @@ plan files, or generated variable files. Do not upgrade the AWS account automati
 
 ```sh
 python3 scripts/aws/manage.py init-state --profile wmbg-infra
-python3 scripts/aws/manage.py plan --profile wmbg-infra --email YOUR_ALERT_EMAIL
+python3 scripts/aws/manage.py plan --profile wmbg-infra
 ```
 
 Review the Terraform plan and cost assumptions before applying. After approval:
@@ -42,6 +42,10 @@ python3 scripts/aws/manage.py apply --profile wmbg-infra
 python3 scripts/aws/manage.py configure-github --profile wmbg-infra
 python3 scripts/aws/manage.py seed-secrets --profile wmbg-infra
 ```
+
+The budget and CloudWatch notifications use the same SNS topic. Without an email subscription, alerts
+are published to SNS but are not delivered to an inbox; add the address with `--email` before relying
+on email notifications. SNS sends a confirmation message that must be accepted before email delivery.
 
 Secret setup reads the local Gemini key or prompts without echo. Initial owner credentials are stored
 in `.aws-runtime/initial-owner.json` with mode 0600. Complete the SNS email confirmation if requested.

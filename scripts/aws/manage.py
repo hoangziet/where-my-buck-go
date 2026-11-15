@@ -149,10 +149,8 @@ def plan(args):
     if not email:
         contact = aws('account', 'get-contact-information', check=False)
         email = contact.get('ContactInformation', {}).get('EmailAddress') if contact else None
-    if not email:
-        raise RuntimeError('Provide --email for AWS cost alerts')
     config = {'region': args.region, 'project': args.project,
-              'budget_email': email,
+              'budget_email': email or '',
               'database_engine_version': inventory['database_engine_version']}
     save(INFRA/'deployment.auto.tfvars.json', config)
     command(['terraform', f'-chdir={INFRA}', 'plan', '-input=false', '-out=deployment.tfplan'], capture=False)

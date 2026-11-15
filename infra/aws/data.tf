@@ -120,25 +120,88 @@ resource "aws_budgets_budget" "app" {
     include_refund = false
   }
   notification {
-    comparison_operator        = "GREATER_THAN"
-    threshold                  = 80
-    threshold_type             = "PERCENTAGE"
-    notification_type          = "ACTUAL"
-    subscriber_email_addresses = [var.budget_email]
+    comparison_operator       = "GREATER_THAN"
+    threshold                 = 80
+    threshold_type            = "PERCENTAGE"
+    notification_type         = "ACTUAL"
+    subscriber_sns_topic_arns = [aws_sns_topic.operations.arn]
   }
   notification {
-    comparison_operator        = "GREATER_THAN"
-    threshold                  = 100
-    threshold_type             = "PERCENTAGE"
-    notification_type          = "FORECASTED"
-    subscriber_email_addresses = [var.budget_email]
+    comparison_operator       = "GREATER_THAN"
+    threshold                 = 100
+    threshold_type            = "PERCENTAGE"
+    notification_type         = "FORECASTED"
+    subscriber_sns_topic_arns = [aws_sns_topic.operations.arn]
   }
+  depends_on = [aws_sns_topic_policy.operations]
 }
 
 resource "aws_sns_topic" "operations" {
   name = "${var.project}-operations"
 }
+data "aws_iam_policy_document" "operations" {
+  statement {
+    sid     = "AccountOwnerManageTopic"
+    effect  = "Allow"
+    actions = ["SNS:AddPermission", "SNS:DeleteTopic", "SNS:GetTopicAttributes", "SNS:ListSubscriptionsByTopic", "SNS:Publish", "SNS:Receive", "SNS:RemovePermission", "SNS:SetTopicAttributes", "SNS:Subscribe"]
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+    resources = [aws_sns_topic.operations.arn]
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceOwner"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+  statement {
+    sid     = "AllowBudgetsPublish"
+    effect  = "Allow"
+    actions = ["SNS:Publish"]
+    principals {
+      type        = "Service"
+      identifiers = ["budgets.amazonaws.com"]
+    }
+    resources = [aws_sns_topic.operations.arn]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:budgets::${data.aws_caller_identity.current.account_id}:*"]
+    }
+  }
+  statement {
+    sid     = "AllowCloudWatchAlarmsPublish"
+    effect  = "Allow"
+    actions = ["SNS:Publish"]
+    principals {
+      type        = "Service"
+      identifiers = ["cloudwatch.amazonaws.com"]
+    }
+    resources = [aws_sns_topic.operations.arn]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:cloudwatch:${var.region}:${data.aws_caller_identity.current.account_id}:alarm:*"]
+    }
+  }
+}
+resource "aws_sns_topic_policy" "operations" {
+  arn    = aws_sns_topic.operations.arn
+  policy = data.aws_iam_policy_document.operations.json
+}
 resource "aws_sns_topic_subscription" "operations" {
+  count     = var.budget_email == "" ? 0 : 1
   topic_arn = aws_sns_topic.operations.arn
   protocol  = "email"
   endpoint  = var.budget_email

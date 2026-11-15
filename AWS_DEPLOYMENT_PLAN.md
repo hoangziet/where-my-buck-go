@@ -1,6 +1,6 @@
 # AWS Deployment Plan
 
-Status: implementation in progress, 2026-11-15. AWS CLI preflight passed, Terraform state storage is bootstrapped, and infrastructure validation passed. A provisional plan showed 54 resources to create and no updates or deletions; its temporary alert address was invalidated. Recreate the saved plan with the owner's real alert email before review and apply. No application infrastructure has been applied. Local Docker development remains supported.
+Status: implementation in progress, 2026-11-15. AWS CLI preflight passed, Terraform state storage is bootstrapped, and infrastructure validation passed. The saved Terraform plan contains 54 creates, zero updates, and zero deletions. Budget and CloudWatch alerts publish to a secured SNS topic; an email subscription is optional and can be added later. No application infrastructure has been applied. Local Docker development remains supported.
 
 ## Decisions
 
@@ -35,7 +35,7 @@ Gemini remains the existing external AI provider. “AWS deployment” covers ho
 
 - Terraform owns declared infrastructure. AWS CLI handles account inspection, state bootstrap, secret injection, and unsupported provider features. CLI fallbacks must discover existing resources, wait for completion, record identifiers, and safely resume; they must not silently create duplicates or unmanaged drift.
 - GitHub CLI handles repository configuration, pull requests, and CI status checks. AWS deployment credentials are never stored in GitHub.
-- Run `python3 scripts/aws/manage.py ACTION --profile wmbg` for `preflight`, `init-state`, `plan`, `apply`, `configure-github`, `seed-secrets`, `deploy`, `verify`, `rollback`, and `backup`. Use `plan --email ADDRESS` for alert delivery and `deploy --initialize` for initial database roles, then `deploy` for schema migration, containers, and owner setup.
+- Run `python3 scripts/aws/manage.py ACTION --profile wmbg-infra` for `preflight`, `init-state`, `plan`, `apply`, `configure-github`, `seed-secrets`, `deploy`, `verify`, `rollback`, and `backup`. Add `plan --email ADDRESS` to create an SNS email subscription, or add it later with a new plan. Use `deploy --initialize` for initial database roles, then `deploy` for schema migration, containers, and owner setup.
 - Authenticate interactively with `aws login --profile wmbg --region ap-southeast-2`; the `wmbg-infra` credential-process profile delegates to this short-lived session. The release command checks that the exact commit is on `main` with successful required CI before building and pushing images locally.
 - Runtime access uses an EC2 instance profile and IMDSv2. No persistent AWS access keys are installed. Database migration credentials remain separate from application credentials.
 - Deploy through Systems Manager Run Command with a checksum-verified S3 release bundle. The origin has no public inbound or SSH rule; CloudFront reaches port 8080 through its service security group.

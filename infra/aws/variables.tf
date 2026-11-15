@@ -15,7 +15,9 @@ variable "instance_type" {
   default = "t3.small"
 }
 variable "budget_email" {
-  type = string
+  type        = string
+  default     = ""
+  description = "Optional email subscription for AWS budget and operations notifications."
 }
 variable "monthly_budget_usd" {
   type    = number
