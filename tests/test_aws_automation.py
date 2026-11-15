@@ -71,3 +71,36 @@ def test_backup_resumes_app_after_dump_failure(tmp_path, monkeypatch):
         runtime.archive(tmp_path, manifest, None)
     assert calls[0] == ('stop', 'proxy', 'frontend', 'backend')
     assert calls[-1][:3] == ('up', '-d', '--wait')
+
+
+def test_existing_credentials_need_no_interactive_prompt(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(manager, 'PRIVATE', tmp_path)
+    monkeypatch.setattr(manager, 'get_parameter', lambda name: {'existing': True})
+    monkeypatch.setattr(manager.getpass, 'getpass', lambda prompt: pytest.fail('Unexpected prompt'))
+    monkeypatch.setattr(manager, 'put_parameter', lambda *a, **kw: pytest.fail('Unexpected secret write'))
+    manager.seed_secrets(SimpleNamespace(project='wmbg'))
+
+
+def test_interrupted_secret_setup_preserves_credentials_and_creates_owner(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(manager, 'PRIVATE', tmp_path)
+    monkeypatch.setattr(manager, 'get_parameter', lambda name: {'existing': True}
+                        if name.endswith(('/app', '/migration')) else None)
+    writes = []
+    monkeypatch.setattr(manager, 'put_parameter', lambda name, value: writes.append((name, value)))
+    manager.seed_secrets(SimpleNamespace(project='wmbg'))
+    assert [name for name, _ in writes] == ['/wmbg/owner']
+    assert json.loads((tmp_path/'initial-owner.json').read_text()) == writes[0][1]
+
+
+def test_deployment_rejects_bundle_from_another_commit_before_ecr(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setenv('AWS_DEPLOYMENT', '{}')
+    monkeypatch.setattr(manager, 'command', lambda args: SimpleNamespace(stdout='b' * 40))
+    monkeypatch.setattr(manager, 'aws', lambda *a, **kw: pytest.fail('Unexpected AWS call'))
+    with pytest.raises(ValueError, match='checkout must match'):
+        manager.deploy(SimpleNamespace(sha='a' * 40))
