@@ -13,6 +13,7 @@ frontend/.next-*/
 frontend/test-results/
 frontend/playwright-report/
 .env
+client_secret*.json
 .local-evidence/
 .backups/
 

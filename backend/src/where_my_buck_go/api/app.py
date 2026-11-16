@@ -1,18 +1,23 @@
 """HTTP boundary: cookies, request validation, CSRF, static frontend."""
 
+import hmac
 import os
+import secrets
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import quote
 
 from flask import Flask, Response, g, request, send_from_directory
 from flask import jsonify as flask_jsonify
+from flask import redirect as flask_redirect
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from where_my_buck_go.adapters.auth_repo import PostgresAuthStore
 from where_my_buck_go.adapters.db import database_url_from_environment, engine_for
 from where_my_buck_go.adapters.gemini import DEFAULT_MODEL, GeminiClient
+from where_my_buck_go.adapters.google_auth import GoogleAuthClient, google_auth_from_environment
 from where_my_buck_go.adapters.history_repo import PostgresHistoryStore
 from where_my_buck_go.adapters.ledger_repo import PostgresLedgerStore
 from where_my_buck_go.adapters.local_evidence import LocalEvidenceStore
@@ -24,11 +29,13 @@ from where_my_buck_go.services.history import HistoryService
 from where_my_buck_go.services.ledger import LedgerService
 
 jsonify = cast(Callable[..., Response], flask_jsonify)
+redirect = cast(Callable[..., Response], flask_redirect)
 
 
 def create_app(service: AuthService | None = None, *, production: bool | None = None,
                ledger: LedgerService | None = None, chat: ChatService | None = None,
-               history: HistoryService | None = None) -> Flask:
+               history: HistoryService | None = None,
+               google_auth: GoogleAuthClient | None = None) -> Flask:
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 4_100_000
     is_production = production if production is not None else os.environ.get("APP_ENV") == "production"
@@ -38,6 +45,9 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)  # type: ignore[method-assign]
     cookie_name = "__Host-wmbg_session" if is_production else "wmbg_session"
     csrf_cookie_name = "__Host-wmbg_csrf" if is_production else "wmbg_csrf"
+    oauth_state_cookie_name = "__Host-wmbg_oauth_state" if is_production else "wmbg_oauth_state"
+    if google_auth is None:
+        google_auth = google_auth_from_environment()
     if service is None:
         engine = engine_for(database_url_from_environment())
         service = AuthService(PostgresAuthStore(engine), os.environ["AUTH_HMAC_KEY"].encode("utf-8"))
@@ -77,7 +87,7 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
             return None
         token = request.cookies.get(cookie_name, "")
         session = service.session(token)
-        if request.path == "/api/auth/login" and session is None:
+        if request.path in ("/api/auth/login", "/api/auth/google", "/api/auth/google/callback") and session is None:
             return None
         if session is None:
             return jsonify(error="Unauthorized"), 401
@@ -105,6 +115,81 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
                             secure=is_production, samesite="Strict", path="/")
         response.set_cookie(csrf_cookie_name, result.csrf, max_age=12 * 60 * 60, httponly=False,
                             secure=is_production, samesite="Strict", path="/")
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    def determine_google_redirect_uri() -> str:
+        explicit = os.environ.get("GOOGLE_REDIRECT_URI", "").strip()
+        if explicit:
+            return explicit
+        return f"{request.scheme}://{request.host}/api/auth/google/callback"
+
+    @app.route("/api/auth/google", methods=["GET"])
+    def google_auth_start() -> Response:
+        if not google_auth.is_configured:
+            return redirect(f"/login?error={quote('Google Sign-In is not configured')}")
+        state = secrets.token_urlsafe(32)
+        redirect_uri = determine_google_redirect_uri()
+        auth_url = google_auth.get_authorization_url(redirect_uri, state)
+        response = redirect(auth_url)
+        response.set_cookie(oauth_state_cookie_name, state, max_age=300, httponly=True,
+                            secure=is_production, samesite="Lax", path="/")
+        return response
+
+    @app.route("/api/auth/google/callback", methods=["GET"])
+    def google_auth_callback() -> Response:
+        error = request.args.get("error")
+        if error:
+            return redirect(f"/login?error={quote('Google sign-in was cancelled or failed')}")
+        code = request.args.get("code")
+        state = request.args.get("state")
+        cookie_state = request.cookies.get(oauth_state_cookie_name)
+        if not code or not state or not cookie_state or not hmac.compare_digest(state, cookie_state):
+            return redirect(f"/login?error={quote('Invalid or expired authentication session')}")
+
+        redirect_uri = determine_google_redirect_uri()
+        try:
+            user_info = google_auth.exchange_code(code, redirect_uri)
+            email = user_info.get("email")
+            email_verified = user_info.get("email_verified") in (True, "true", 1)
+            if not email or not email_verified:
+                return redirect(f"/login?error={quote('Google account email is not verified')}")
+            result = service.login_or_register_oauth(email)
+        except Exception as exc:
+            return redirect(f"/login?error={quote(f'Google authentication failed: {exc}')}")
+
+        response = redirect("/dashboard")
+        response.set_cookie(cookie_name, result.token, max_age=12 * 60 * 60, httponly=True,
+                            secure=is_production, samesite="Lax", path="/")
+        response.set_cookie(csrf_cookie_name, result.csrf, max_age=12 * 60 * 60, httponly=False,
+                            secure=is_production, samesite="Lax", path="/")
+        response.set_cookie(oauth_state_cookie_name, "", max_age=0, httponly=True,
+                            secure=is_production, samesite="Lax", path="/")
+        return response
+
+    @app.route("/api/auth/google", methods=["POST"])
+    def google_auth_token() -> Response | tuple[Response, int]:
+        data: Any = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(error="Invalid request body"), 400
+        credential = data.get("credential")
+        if not isinstance(credential, str) or not credential:
+            return jsonify(error="credential is required"), 400
+        try:
+            user_info = google_auth.verify_id_token(credential)
+            email = user_info.get("email")
+            email_verified = user_info.get("email_verified") in (True, "true", 1)
+            if not email or not email_verified:
+                return jsonify(error="Google account email is not verified"), 400
+            result = service.login_or_register_oauth(email)
+        except Exception as exc:
+            return jsonify(error=f"Google authentication failed: {exc}"), 400
+
+        response = jsonify(username=result.username, csrfToken=result.csrf)
+        response.set_cookie(cookie_name, result.token, max_age=12 * 60 * 60, httponly=True,
+                            secure=is_production, samesite="Lax", path="/")
+        response.set_cookie(csrf_cookie_name, result.csrf, max_age=12 * 60 * 60, httponly=False,
+                            secure=is_production, samesite="Lax", path="/")
         response.headers["Cache-Control"] = "no-store"
         return response
 

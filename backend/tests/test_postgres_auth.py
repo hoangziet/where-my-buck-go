@@ -87,3 +87,32 @@ def test_postgres_create_session_prunes_expired_rows() -> None:
         with admin.begin() as conn:
             conn.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
         admin.dispose()
+
+
+@pytest.mark.skipif(not os.environ.get("TEST_DATABASE_URL"), reason="Set TEST_DATABASE_URL for live PostgreSQL tests")
+def test_postgres_oauth_multi_user() -> None:
+    url = os.environ["TEST_DATABASE_URL"]
+    schema = "wmbg_test_" + uuid4().hex
+    admin = create_engine(url)
+    with admin.begin() as conn:
+        conn.execute(text(f'CREATE SCHEMA "{schema}"'))
+    engine = create_engine(url, connect_args={"options": f"-csearch_path={schema}"})
+    try:
+        metadata.create_all(engine)
+        service = AuthService(PostgresAuthStore(engine), b"integration-key-at-least-32-bytes-long")
+        # Google user 1
+        res1 = service.login_or_register_oauth("user1@example.com")
+        assert res1.username == "user1@example.com"
+        # Google user 2
+        res2 = service.login_or_register_oauth("user2@example.com")
+        assert res2.username == "user2@example.com"
+        # Re-login user 1
+        res1_again = service.login_or_register_oauth("user1@example.com")
+        assert res1_again.username == "user1@example.com"
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT count(*) FROM users")).scalar_one() == 2
+    finally:
+        engine.dispose()
+        with admin.begin() as conn:
+            conn.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        admin.dispose()

@@ -265,3 +265,38 @@ test("image intake timeout displays error with safe retry guidance and resends w
   expect(requestKeys[0]).toBeTruthy();
   expect(requestKeys[1]).toBe(requestKeys[0]);
 });
+
+test("chat sidebar lists previous chats and toggles collapse", async ({ page }) => {
+  await page.route("**/api/auth/me", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ username: "owner" }),
+  }));
+  await page.route("**/api/chats", (route) => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({
+      items: [
+        { id: "chat-123", title: "Cà phê sáng nay", createdAt: "2026-11-16T08:00:00Z" },
+        { id: "chat-456", title: "Tiền phòng trọ", createdAt: "2026-11-15T10:00:00Z" },
+      ],
+    }),
+  }));
+
+  await page.goto("/chat");
+  const sidebar = page.getByRole("complementary", { name: "Chat history" });
+  await expect(sidebar).toBeVisible();
+  await expect(sidebar.getByText("Cà phê sáng nay")).toBeVisible();
+  await expect(sidebar.getByText("Tiền phòng trọ")).toBeVisible();
+
+  // Test collapsing sidebar
+  await sidebar.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(sidebar).toHaveClass(/lg:w-0/);
+
+  // Test expanding sidebar
+  await page.getByRole("button", { name: "Open sidebar" }).click();
+  await expect(sidebar).not.toHaveClass(/lg:w-0/);
+
+  // Test New chat button in sidebar
+  await sidebar.getByRole("button", { name: "New chat" }).click();
+  await expect(page).toHaveURL(/\/chat$/);
+});

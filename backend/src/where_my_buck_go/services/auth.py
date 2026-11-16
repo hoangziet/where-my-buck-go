@@ -31,6 +31,7 @@ class SessionRecord:
 class AuthStore(Protocol):
     def find_user(self, username: str) -> UserRecord | None: ...
     def create_owner(self, username: str, password_hash: str, now: datetime) -> bool: ...
+    def create_user(self, username: str, password_hash: str, now: datetime) -> UserRecord: ...
     def reset_password(self, username: str, password_hash: str, now: datetime) -> bool: ...
     def reserve_login(self, digest: bytes, now: datetime) -> bool: ...
     def create_session(self, user_id: str, token_digest: bytes, csrf_digest: bytes, expiry: datetime) -> None: ...
@@ -93,6 +94,25 @@ class AuthService:
             return None
         if user is None:
             return None
+        token = secrets.token_urlsafe(32)
+        csrf = secrets.token_urlsafe(32)
+        self.store.create_session(user.id, digest_secret(token), digest_secret(csrf), session_expiry(now))
+        return LoginResult(token, csrf, user.username)
+
+    def login_or_register_oauth(self, email: str) -> LoginResult:
+        normalized_email = email.strip().lower()
+        if not normalized_email or len(normalized_email) > 128:
+            raise ValueError("Invalid email address")
+        user = self.store.find_user(normalized_email) or self.store.find_user(email.strip())
+        now = utc_now()
+        if user is None:
+            dummy_password = secrets.token_urlsafe(32)
+            try:
+                user = self.store.create_user(normalized_email, self.hasher.hash(dummy_password), now)
+            except Exception:
+                user = self.store.find_user(normalized_email)
+                if user is None:
+                    raise
         token = secrets.token_urlsafe(32)
         csrf = secrets.token_urlsafe(32)
         self.store.create_session(user.id, digest_secret(token), digest_secret(csrf), session_expiry(now))

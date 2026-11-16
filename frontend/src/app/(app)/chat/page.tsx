@@ -1,10 +1,10 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Check, Paperclip, Camera, ArrowUp, ArrowLeft, Receipt, Bookmark, Database, Sparkles } from "lucide-react";
+import { Plus, Check, Paperclip, Camera, ArrowUp, Receipt, Bookmark, Database, Sparkles, PanelLeft } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
+import { ChatSidebar } from "@/components/ChatSidebar";
 import { formatNumber } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { ChatHistoryItem, ProposalDto, TraceEntry, TransactionDto } from "@/lib/api";
@@ -58,6 +58,8 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [history, setHistory] = useState<ChatHistoryItem[]>([]);
   const [chatId, setChatId] = useState<string | undefined>(urlChatId);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [refreshSidebarTrigger, setRefreshSidebarTrigger] = useState(0);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmState>({});
@@ -181,6 +183,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
       if (res.chatId && res.chatId !== chatId) {
         setChatId(res.chatId);
         ownedChatId.current = res.chatId;
+        setRefreshSidebarTrigger((prev) => prev + 1);
         router.replace(`/chat?id=${res.chatId}`);
       }
       let assistant: AssistantMessage;
@@ -336,39 +339,41 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   }
 
   return (
-    <main className="flex-1 flex flex-col min-h-screen lg:min-h-0">
-      <header className="lg:hidden flex items-center gap-2 px-3 py-3 border-b border-border-nav bg-surface sticky top-0 z-20">
-        <Link
-          href="/dashboard"
-          aria-label="Back to dashboard"
-          className="w-11 h-11 flex items-center justify-center text-ink rounded-lg transition-colors duration-150 active:bg-[#F4F2EC]"
-        >
-          <ArrowLeft size={20} />
-        </Link>
-        <span className="flex-1 font-semibold text-base">AI Chat</span>
-        <button
-          type="button"
-          aria-label="New chat"
-          onClick={startNewChat}
-          className="w-11 h-11 border-0 bg-transparent text-ink rounded-lg cursor-pointer transition-colors duration-150 active:bg-[#F4F2EC]"
-        >
-          <Plus size={20} />
-        </button>
-      </header>
+    <div className="flex-1 flex overflow-hidden min-h-screen lg:min-h-0">
+      <ChatSidebar
+        activeChatId={chatId}
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen((prev) => !prev)}
+        onSelectChat={(id) => router.push(`/chat?id=${id}`)}
+        onNewChat={startNewChat}
+        refreshTrigger={refreshSidebarTrigger}
+      />
 
-      <div className="flex-1 px-4 lg:px-8 pb-40 lg:pb-8 flex flex-col">
-        <div role="log" aria-live="polite" className="w-full max-w-[860px] mx-auto flex flex-col gap-7">
-          <div className="hidden lg:flex flex-wrap items-center justify-between gap-3 py-5.5 border-b border-border-nav">
-            <h1 className="m-0 text-[17px] font-semibold">AI Chat</h1>
-            <button
-              type="button"
-              onClick={startNewChat}
-              className="flex items-center gap-2 bg-surface border border-border-input rounded-[10px] px-3.5 min-h-10 text-sm font-medium cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC]"
-            >
-              <Plus size={16} strokeWidth={2} />
-              New chat
-            </button>
-          </div>
+      <main className="flex-1 flex flex-col min-w-0 min-h-screen lg:min-h-0 overflow-y-auto">
+        <header className="flex items-center gap-2 px-3.5 py-3 border-b border-border-nav bg-surface sticky top-0 z-20">
+          <button
+            type="button"
+            aria-label={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            className="w-10 h-10 flex items-center justify-center text-ink-3 hover:text-ink rounded-lg transition-colors duration-150 hover:bg-[#F4F2EC] border-0 bg-transparent cursor-pointer"
+          >
+            <PanelLeft size={19} />
+          </button>
+          <span className="flex-1 font-semibold text-sm lg:text-base truncate">
+            {chatId ? "AI Chat" : "New Chat"}
+          </span>
+          <button
+            type="button"
+            aria-label="New chat"
+            onClick={startNewChat}
+            className="w-10 h-10 border-0 bg-transparent text-ink-3 hover:text-ink rounded-lg cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC] flex items-center justify-center"
+          >
+            <Plus size={19} />
+          </button>
+        </header>
+
+        <div className="flex-1 px-4 lg:px-8 pb-40 lg:pb-8 flex flex-col">
+          <div role="log" aria-live="polite" className="w-full max-w-[860px] mx-auto flex flex-col gap-7 pt-4">
 
           {messages.length === 0 && (
             <p className="m-0 text-sm text-muted">
@@ -565,7 +570,8 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
           <span className="text-xs text-muted text-center">Nothing is saved until you confirm it. Paste a PNG/JPEG with Ctrl+V.</span>
         </div>
       </div>
-    </main>
+      </main>
+    </div>
   );
 }
 
