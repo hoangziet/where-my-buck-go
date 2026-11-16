@@ -2,10 +2,10 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Check, Paperclip, Camera, ArrowUp, Receipt, Bookmark, Database, Sparkles, PanelLeft } from "lucide-react";
+import { Plus, Check, Paperclip, Camera, ArrowUp, Receipt, Bookmark, Database, Sparkles, PanelLeft, RotateCw } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
 import { ChatSidebar } from "@/components/ChatSidebar";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatVND } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { ChatHistoryItem, ProposalDto, TraceEntry, TransactionDto } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/api";
@@ -398,19 +398,24 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
                   <>
                     <FormattedMessage text={m.text} />
                     {m.start && m.end && (
-                      <button
-                        type="button"
-                        onClick={() => handlePin(i, m.text, m.start!, m.end!)}
-                        disabled={pinnedIds.has(i)}
-                        className={`self-start flex items-center gap-2 border rounded-[10px] px-3.5 min-h-9 text-[13px] font-medium cursor-pointer transition-colors duration-150 ${
-                          pinnedIds.has(i)
-                            ? "bg-accent-soft-bg text-accent-strong border-accent-soft-border"
-                            : "bg-surface text-ink border-border-input hover:bg-[#F4F2EC]"
-                        }`}
-                      >
-                        <Bookmark size={14} />
-                        {pinnedIds.has(i) ? "Pinned to Dashboard" : "Pin to Dashboard"}
-                      </button>
+                      <div className="flex flex-col gap-2 self-start">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handlePin(i, m.text, m.start!, m.end!)}
+                            disabled={pinnedIds.has(i)}
+                            className={`flex items-center gap-2 border rounded-[10px] px-3.5 min-h-9 text-[13px] font-medium cursor-pointer transition-colors duration-150 ${
+                              pinnedIds.has(i)
+                                ? "bg-accent-soft-bg text-accent-strong border-accent-soft-border"
+                                : "bg-surface text-ink border-border-input hover:bg-[#F4F2EC]"
+                            }`}
+                          >
+                            <Bookmark size={14} />
+                            {pinnedIds.has(i) ? "Pinned to Dashboard" : "Pin to Dashboard"}
+                          </button>
+                          <RefreshRangeDataButton start={m.start} end={m.end} />
+                        </div>
+                      </div>
                     )}
                   </>
                 )}
@@ -606,6 +611,101 @@ function AiMessage({ children }: { children: React.ReactNode }) {
   );
 }
 
+function RefreshRangeDataButton({ start, end }: { start: string; end: string }) {
+  const [loading, setLoading] = useState(false);
+  const [liveTotals, setLiveTotals] = useState<{
+    income: number;
+    expense: number;
+    count: number;
+    refreshedAt: string;
+  } | null>(null);
+
+  async function handleRefresh() {
+    setLoading(true);
+    try {
+      const res = await api.listTransactions();
+      const inRange = res.items.filter((t) => !t.deleted && t.occurredDate >= start && t.occurredDate <= end);
+      let income = 0;
+      let expense = 0;
+      for (const t of inRange) {
+        const val = Number(t.amount);
+        if (t.direction === "income") income += val;
+        else expense += val;
+      }
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+      setLiveTotals({ income, expense, count: inRange.length, refreshedAt: timeStr });
+    } catch {
+      // silently fallback
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={handleRefresh}
+        disabled={loading}
+        className="flex items-center gap-2 border rounded-[10px] px-3.5 min-h-9 text-[13px] font-medium bg-surface text-ink border-border-input hover:bg-[#F4F2EC] cursor-pointer transition-colors duration-150 disabled:opacity-50"
+      >
+        <RotateCw size={14} className={loading ? "animate-spin text-accent" : "text-muted"} />
+        <span>{loading ? "Đang tính toán…" : "Làm mới số liệu"}</span>
+      </button>
+      {liveTotals && (
+        <div className="p-3 rounded-xl border border-accent-soft-border bg-[#F4F8F5] text-xs flex flex-col gap-1.5 animate-fadeIn">
+          <div className="flex items-center justify-between text-muted text-[11px]">
+            <span className="font-medium text-accent-strong">Số liệu mới nhất ({start} → {end})</span>
+            <span>Cập nhật lúc {liveTotals.refreshedAt}</span>
+          </div>
+          <div className="flex items-center gap-4 font-mono text-[13px]">
+            <span className="text-[#1E7E34] font-medium">+Thu: {formatVND(liveTotals.income)}</span>
+            <span className="text-ink font-medium">−Chi: {formatVND(liveTotals.expense)}</span>
+            <span className="text-muted text-xs">({liveTotals.count} giao dịch)</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isAmountHeader(header: string): boolean {
+  const h = header.toLowerCase();
+  return h.includes("tiền") || h.includes("amount") || h.includes("giá") || h.includes("thu") || h.includes("chi");
+}
+
+function isCategoryHeader(header: string): boolean {
+  const h = header.toLowerCase();
+  return h.includes("danh mục") || h.includes("category");
+}
+
+function isDateOrTimeHeader(header: string): boolean {
+  const h = header.toLowerCase();
+  return h.includes("ngày") || h.includes("date") || h.includes("giờ") || h.includes("time");
+}
+
+function formatTableCell(header: string, cell: string) {
+  if (isCategoryHeader(header)) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#EFECE6] text-ink-2">
+        {cell}
+      </span>
+    );
+  }
+  if (isAmountHeader(header)) {
+    const isPositive = cell.trim().startsWith("+");
+    const isNegative = cell.trim().startsWith("-");
+    const colorClass = isPositive
+      ? "text-[#1E7E34] font-semibold"
+      : isNegative
+      ? "text-ink font-semibold"
+      : "text-ink font-medium";
+    return <span className={`font-mono ${colorClass}`}>{cell}</span>;
+  }
+  return cell;
+}
+
 function FormattedMessage({ text }: { text: string }) {
   const lines = text.split("\n");
   const blocks: ({ type: "text"; lines: string[] } | { type: "table"; headers: string[]; rows: string[][] })[] = [];
@@ -642,24 +742,38 @@ function FormattedMessage({ text }: { text: string }) {
         if (block.type === "table") {
           return (
             <div key={idx} className="my-1.5 overflow-x-auto rounded-xl border border-border bg-surface shadow-xs">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="bg-[#F4F2EC] text-ink font-semibold border-b border-border">
-                    {block.headers.map((h, hIdx) => (
-                      <th key={hIdx} className="px-3.5 py-2 whitespace-nowrap">
-                        {h}
-                      </th>
-                    ))}
+                    {block.headers.map((h, hIdx) => {
+                      const isAmount = isAmountHeader(h);
+                      const isDate = isDateOrTimeHeader(h);
+                      const align = isAmount ? "text-right" : isDate ? "text-center" : "text-left";
+                      return (
+                        <th
+                          key={hIdx}
+                          className={`px-3.5 py-2.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider ${align}`}
+                        >
+                          {h}
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-row">
                   {block.rows.map((row, rIdx) => (
                     <tr key={rIdx} className="hover:bg-[#FAF9F5] transition-colors">
-                      {row.map((cell, cIdx) => (
-                        <td key={cIdx} className="px-3.5 py-2 text-ink-2 whitespace-nowrap">
-                          {cell}
-                        </td>
-                      ))}
+                      {row.map((cell, cIdx) => {
+                        const h = block.headers[cIdx] || "";
+                        const isAmount = isAmountHeader(h);
+                        const isDate = isDateOrTimeHeader(h);
+                        const align = isAmount ? "text-right" : isDate ? "text-center" : "text-left";
+                        return (
+                          <td key={cIdx} className={`px-3.5 py-2.5 text-ink-2 whitespace-nowrap ${align}`}>
+                            {formatTableCell(h, cell)}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -677,6 +791,62 @@ function FormattedMessage({ text }: { text: string }) {
       })}
     </div>
   );
+}
+
+function StepDataPreview({ data }: { data: unknown }) {
+  if (!data || typeof data !== "object") return null;
+  const obj = data as Record<string, unknown>;
+
+  if (obj.totals && typeof obj.totals === "object") {
+    const totals = obj.totals as { income?: string; expense?: string };
+    const range = obj.range as { start?: string; end?: string } | undefined;
+    const txCount = typeof obj.transactionCount === "number" ? obj.transactionCount : undefined;
+    return (
+      <div className="mt-2 p-2.5 rounded-lg bg-[#EAE8E1] border border-border flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted mr-1">Query Result</span>
+        {range && (
+          <span className="px-2 py-0.5 rounded bg-surface border border-border text-[11px] font-mono text-muted">
+            {range.start} → {range.end}
+          </span>
+        )}
+        {totals.income !== undefined && (
+          <span className="px-2 py-0.5 rounded bg-surface border border-border text-[11px] font-mono font-medium text-[#1E7E34]">
+            +{formatVND(Number(totals.income))}
+          </span>
+        )}
+        {totals.expense !== undefined && (
+          <span className="px-2 py-0.5 rounded bg-surface border border-border text-[11px] font-mono font-medium text-ink">
+            −{formatVND(Number(totals.expense))}
+          </span>
+        )}
+        {txCount !== undefined && (
+          <span className="text-[11px] text-muted">
+            ({txCount} {txCount === 1 ? "transaction" : "transactions"} matched)
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (obj.itemCount !== undefined) {
+    return (
+      <div className="mt-2 p-2 rounded-lg bg-[#EAE8E1] text-[11px] text-ink-2 font-mono flex items-center gap-2">
+        <span className="font-semibold text-muted uppercase text-[10px]">Result:</span>
+        <span>{String(obj.itemCount)} parsed item(s)</span>
+      </div>
+    );
+  }
+
+  if (obj.matchCount !== undefined) {
+    return (
+      <div className="mt-2 p-2 rounded-lg bg-[#EAE8E1] text-[11px] text-ink-2 font-mono flex items-center gap-2">
+        <span className="font-semibold text-muted uppercase text-[10px]">Result:</span>
+        <span>{String(obj.matchCount)} matching transaction(s) found</span>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function ParametersTable({ rawParams }: { rawParams: string }) {
@@ -737,6 +907,7 @@ function TracePanel({ entries }: { entries: TraceEntry[] }) {
               <span>{entry.title}</span>
             </div>
             {entry.detail && <p className="mt-1 mb-0 text-xs text-muted">{entry.detail}</p>}
+            {entry.data && <StepDataPreview data={entry.data} />}
             {entry.sql && (
               <div className="mt-2 flex flex-col gap-2">
                 {entry.inlinedSql && (

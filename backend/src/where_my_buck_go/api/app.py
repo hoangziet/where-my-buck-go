@@ -68,7 +68,7 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
 
     @app.after_request
     def prevent_auth_caching(response: Response) -> Response:
-        if request.path.startswith("/api/"):
+        if request.path.startswith("/api/") and not request.path.startswith("/api/evidence/"):
             response.headers["Cache-Control"] = "no-store"
         return response
 

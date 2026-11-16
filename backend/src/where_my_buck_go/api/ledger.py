@@ -23,7 +23,6 @@ from where_my_buck_go.services.ledger import (
     LedgerResult,
     LedgerService,
     NotFound,
-    transaction_view,
 )
 
 jsonify = cast(Callable[..., Response], flask_jsonify)
@@ -130,7 +129,7 @@ def ledger_blueprint(
 
     @api.route("/transactions", methods=["GET"])
     def transactions() -> Response:
-        return jsonify(items=[transaction_view(item) for item in service.store.list_transactions(owner())])
+        return jsonify(items=service.list_transactions_with_evidence(owner()))
 
     @api.route("/reports/summary", methods=["GET"])
     def reports_summary() -> tuple[Response, int] | Response:
@@ -153,25 +152,42 @@ def ledger_blueprint(
 
     @api.route("/evidence/<identifier>", methods=["GET"])
     def original_evidence(identifier: str) -> Response:
+        record = service.store.read_evidence(owner(), identifier)
+        if record is None:
+            raise NotFound
+        etag = f'"{record.digest.hex()}"'
+        if_none_match = request.headers.get("If-None-Match")
+        cache_control = "private, max-age=604800, immutable"
+        if if_none_match and if_none_match.strip() == etag:
+            response = Response(status=304)
+            response.headers["ETag"] = etag
+            response.headers["Cache-Control"] = cache_control
+            return response
         kind, content = service.read_evidence(owner(), identifier)
         content_type = "text/plain; charset=utf-8" if kind == "text" else kind
-        return Response(content, content_type=content_type)
+        response = Response(content, content_type=content_type)
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = cache_control
+        return response
 
     @api.route("/chat/messages", methods=["POST"])
     def chat_message() -> tuple[Response, int]:
         if chat is None:
             return jsonify(error="Gemini chat is not configured"), 503
         body = payload()
-        if not set(body) <= {"text", "history", "expectedVersion", "chatId"}:
+        if not set(body) <= {"text", "history", "expectedVersion", "chatId", "clientTimezone"}:
             raise InvalidProposal("Unexpected chat fields")
         version(body, create=True)
         text = body.get("text")
         chat_history = body.get("history", [])
         chat_id = body.get("chatId")
+        client_timezone = body.get("clientTimezone")
         if not isinstance(text, str) or not isinstance(chat_history, list):
             raise InvalidProposal("Chat text and history are required")
         if chat_id is not None and not isinstance(chat_id, str):
             raise InvalidProposal("chatId must be text")
+        if client_timezone is not None and not isinstance(client_timezone, str):
+            raise InvalidProposal("clientTimezone must be text")
         bounded: list[dict[str, str]] = []
         for item in chat_history:
             if (not isinstance(item, dict) or set(item) != {"role", "text"} or
@@ -180,7 +196,10 @@ def ledger_blueprint(
             bounded.append({"role": item["role"], "text": item["text"]})
         with capture_debug_trace() as trace:
             try:
-                response = chat.respond(owner(), key(), text, datetime.now(timezone.utc), bounded, chat_id)
+                response = chat.respond(
+                    owner(), key(), text, datetime.now(timezone.utc), bounded, chat_id,
+                    client_timezone=client_timezone,
+                )
             except GeminiError as error:
                 status = 429 if "HTTP 429" in str(error) else 503
                 return jsonify(error=str(error), debugTrace=trace.snapshot()), status
@@ -257,14 +276,17 @@ def ledger_blueprint(
     def image_intake() -> tuple[Response, int]:
         if chat is None:
             return jsonify(error="Gemini chat is not configured"), 503
-        if set(request.files) != {"image"} or not set(request.form) <= {"caption", "chatId"}:
+        if set(request.files) != {"image"} or not set(request.form) <= {"caption", "chatId", "clientTimezone"}:
             raise InvalidProposal("One PNG or JPEG image is required")
         caption = request.form.get("caption", "").strip()
         chat_id = (request.form.get("chatId") or "").strip() or None
+        client_timezone = (request.form.get("clientTimezone") or "").strip() or None
         if len(caption) > 500:
             raise InvalidProposal("Caption must be at most 500 characters")
         if chat_id is not None and not isinstance(chat_id, str):
             raise InvalidProposal("chatId must be text")
+        if client_timezone is not None and len(client_timezone) > 100:
+            raise InvalidProposal("clientTimezone must be at most 100 characters")
         idempotency_key = key()
         raw = request.files["image"].read(4_000_001)
         with capture_debug_trace() as trace:
@@ -276,14 +298,22 @@ def ledger_blueprint(
                 return jsonify(error=str(error), debugTrace=trace.snapshot()), status
             except ValueError as error:
                 return jsonify(error=str(error), debugTrace=trace.snapshot()), 400
-            record_step("Read receipt image", "Extracted amount, date, time, and category for review.")
+            record_step(
+                "Read receipt image",
+                "Extracted amount, date, time, and category for review.",
+                data={"amount": str(preview.amount), "category": preview.category, "description": preview.description},
+            )
             fields = LedgerFields(
                 Money(preview.amount, "VND"), "expense", preview.description,
                 TransactionTime(preview.occurred_date, preview.occurred_time, preview.period, "explicit"),
                 preview.category,
             )
             draft = service.create_from_image(owner(), idempotency_key, fields, raw, mime, datetime.now(timezone.utc))
-            record_step("Prepare draft", "Created a review card; no transaction is confirmed.")
+            record_step(
+                "Prepare draft",
+                "Created a review card; no transaction is confirmed.",
+                data={"draftId": draft.body.get("id"), "amount": str(preview.amount)},
+            )
 
         actual_chat_id: str | None = None
         if history is not None:

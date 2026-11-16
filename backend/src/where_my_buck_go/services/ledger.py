@@ -66,6 +66,7 @@ class LedgerStore(Protocol):
     def read_evidence(self, owner: str, identifier: str) -> EvidenceRecord | None: ...
     def list_evidence(self, owner: str, *, proposal_id: str | None = None,
                       transaction_id: str | None = None) -> list[str]: ...
+    def list_evidence_batch(self, owner: str, transaction_ids: list[str]) -> dict[str, list[dict[str, str]]]: ...
     def aggregate(self, owner: str, start: date, end: date) -> dict[str, str]: ...
     def monthly_totals(self, owner: str, start: date, end: date) -> list[dict[str, str]]: ...
     def category_totals(self, owner: str, start: date, end: date) -> dict[str, str]: ...
@@ -288,12 +289,31 @@ class LedgerService:
                 "months": self.store.monthly_totals(owner, start, end),
                 "categories": self.store.category_totals(owner, start, end)}
 
+    def list_transactions_with_evidence(self, owner: str) -> list[dict[str, object]]:
+        txs = self.store.list_transactions(owner)
+        tx_ids = [t.id for t in txs]
+        batch = self.store.list_evidence_batch(owner, tx_ids)
+        items: list[dict[str, object]] = []
+        for t in txs:
+            ev_list = batch.get(t.id, [])
+            items.append({
+                **transaction_view(t),
+                "evidenceIds": [e["id"] for e in ev_list],
+                "evidence": ev_list,
+            })
+        return items
+
     def transaction_details(self, owner: str, identifier: str) -> dict[str, object]:
         transaction = self.store.read_transaction(owner, identifier)
         if transaction is None:
             raise NotFound
-        return {**transaction_view(transaction),
-                "evidenceIds": self.store.list_evidence(owner, transaction_id=identifier)}
+        batch = self.store.list_evidence_batch(owner, [identifier])
+        ev_list = batch.get(identifier, [])
+        return {
+            **transaction_view(transaction),
+            "evidenceIds": [e["id"] for e in ev_list],
+            "evidence": ev_list,
+        }
 
     @staticmethod
     def _source(body: dict[str, object]) -> str:

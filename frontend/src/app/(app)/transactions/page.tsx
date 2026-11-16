@@ -616,34 +616,100 @@ function TransactionChangePreview({
   );
 }
 
+function EvidenceImage({ id }: { id: string }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div className="relative rounded-[10px] overflow-hidden border border-border-input bg-[#F4F2EC] min-h-[160px] flex items-center justify-center">
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center text-xs text-muted animate-pulse">
+          Loading receipt image…
+        </div>
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/evidence/${id}`}
+        alt="Original receipt"
+        onLoad={() => setLoaded(true)}
+        className={`w-full h-auto rounded-[10px] object-contain transition-opacity duration-200 ${
+          loaded ? "opacity-100" : "opacity-0"
+        }`}
+        loading="eager"
+      />
+    </div>
+  );
+}
+
 function EvidenceModal({ transaction, onClose }: { transaction: TransactionDto; onClose: () => void }) {
-  const [items, setItems] = useState<{ id: string; evidence: api.EvidenceItem }[] | null>(null);
+  const initialKnown = useMemo(() => {
+    if (transaction.evidence) {
+      return transaction.evidence.map((e) => ({ id: e.id, kind: e.kind, text: undefined as string | undefined }));
+    }
+    if (transaction.evidenceIds && transaction.evidenceIds.length === 0) {
+      return [];
+    }
+    return null;
+  }, [transaction]);
+
+  const [items, setItems] = useState<{ id: string; kind: "text" | "image"; text?: string }[] | null>(initialKnown);
   const [error, setError] = useState<string | null>(null);
   useEscapeKey(onClose);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (transaction.evidence) {
+      const needsText = transaction.evidence.some((e) => e.kind === "text");
+      if (!needsText) return;
+      Promise.all(
+        transaction.evidence.map(async (e) => {
+          if (e.kind === "image") return { id: e.id, kind: "image" as const };
+          const loaded = await api.getEvidence(e.id);
+          return { id: e.id, kind: "text" as const, text: loaded.content };
+        }),
+      )
+        .then((loaded) => {
+          if (!cancelled) setItems(loaded);
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : "Could not load evidence");
+        });
+      return;
+    }
+
+    if (transaction.evidenceIds && transaction.evidenceIds.length === 0) {
+      return;
+    }
+
     api
       .getTransaction(transaction.id)
-      .then((detail) => Promise.all(detail.evidenceIds.map(async (id) => ({ id, evidence: await api.getEvidence(id) }))))
+      .then(async (detail) => {
+        if (detail.evidence && detail.evidence.length > 0) {
+          return Promise.all(
+            detail.evidence.map(async (e) => {
+              if (e.kind === "image") return { id: e.id, kind: "image" as const };
+              const loaded = await api.getEvidence(e.id);
+              return { id: e.id, kind: "text" as const, text: loaded.content };
+            }),
+          );
+        }
+        return Promise.all(
+          detail.evidenceIds.map(async (id) => {
+            const loaded = await api.getEvidence(id);
+            return { id, kind: loaded.kind, text: loaded.kind === "text" ? loaded.content : undefined };
+          }),
+        );
+      })
       .then((loaded) => {
         if (!cancelled) setItems(loaded);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Could not load evidence");
       });
+
     return () => {
       cancelled = true;
     };
-  }, [transaction.id]);
-
-  useEffect(() => {
-    return () => {
-      for (const { evidence } of items ?? []) {
-        if (evidence.kind === "image") URL.revokeObjectURL(evidence.content);
-      }
-    };
-  }, [items]);
+  }, [transaction]);
 
   return (
     <div className="fixed inset-0 bg-ink/40 z-30 flex items-center justify-center px-4" onClick={onClose}>
@@ -668,16 +734,15 @@ function EvidenceModal({ transaction, onClose }: { transaction: TransactionDto; 
         {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
         {!error && items === null && <p className="m-0 text-sm text-muted">Loading…</p>}
         {items?.length === 0 && <p className="m-0 text-sm text-muted">No evidence on file.</p>}
-        {items?.map(({ id, evidence }) =>
-          evidence.kind === "image" ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={id} src={evidence.content} alt="Original receipt" className="w-full rounded-[10px] border border-border-input" />
+        {items?.map(({ id, kind, text }) =>
+          kind === "image" ? (
+            <EvidenceImage key={id} id={id} />
           ) : (
             <pre
               key={id}
               className="m-0 bg-[#F6F5F0] border border-border-row rounded-[10px] px-3.5 py-3 text-sm whitespace-pre-wrap break-words font-sans"
             >
-              {evidence.content}
+              {text ?? "Loading text…"}
             </pre>
           ),
         )}

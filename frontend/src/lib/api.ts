@@ -95,6 +95,11 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   other: "Other",
 };
 
+export interface EvidenceReference {
+  id: string;
+  kind: "text" | "image";
+}
+
 export interface TransactionDto {
   id: string;
   version: number;
@@ -108,6 +113,8 @@ export interface TransactionDto {
   occurredTime: string;
   period: string;
   timeSource: string;
+  evidenceIds?: string[];
+  evidence?: EvidenceReference[];
 }
 
 // Matches the backend's list_transactions() cap (ledger_repo.py); not returned by the API itself,
@@ -220,6 +227,7 @@ export interface TraceEntry {
   sql?: string;
   inlinedSql?: string;
   parameters?: string;
+  data?: Record<string, unknown> | unknown[];
 }
 
 export type ChatResponse = { chatId?: string; debugTrace?: TraceEntry[] } & (
@@ -240,10 +248,17 @@ export function sendChatMessage(
   chatId?: string,
   idempotencyKey?: string,
 ): Promise<ChatResponse> {
+  const clientTimezone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined;
   return request("/api/chat/messages", {
     method: "POST",
     idempotencyKey,
-    body: { text, history, expectedVersion: 0, ...(chatId ? { chatId } : {}) },
+    body: {
+      text,
+      history,
+      expectedVersion: 0,
+      ...(chatId ? { chatId } : {}),
+      ...(clientTimezone ? { clientTimezone } : {}),
+    },
   });
 }
 
@@ -314,6 +329,8 @@ export async function imageIntake(
   form.append("image", file);
   if (caption) form.append("caption", caption);
   if (chatId) form.append("chatId", chatId);
+  const clientTimezone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined;
+  if (clientTimezone) form.append("clientTimezone", clientTimezone);
   let res: Response;
   try {
     res = await fetch("/api/chat/image-intake", {

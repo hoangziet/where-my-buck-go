@@ -18,9 +18,12 @@ class DebugTrace:
         self.entries: list[TraceEntry] = []
         self.omitted_sql = 0
 
-    def add_step(self, title: str, detail: str) -> None:
+    def add_step(self, title: str, detail: str, data: object = None) -> None:
         if len(self.entries) < _MAX_ENTRIES:
-            self.entries.append({"kind": "step", "title": title, "detail": detail})
+            entry: TraceEntry = {"kind": "step", "title": title, "detail": detail}
+            if data is not None:
+                entry["data"] = data
+            self.entries.append(entry)
 
     def add_sql(self, statement: str, parameters: object = None) -> None:
         if len(self.entries) >= _MAX_ENTRIES:
@@ -99,10 +102,10 @@ def capture_debug_trace() -> Iterator[DebugTrace]:
         _CURRENT_TRACE.reset(token)
 
 
-def record_step(title: str, detail: str) -> None:
+def record_step(title: str, detail: str, data: object = None) -> None:
     trace = _CURRENT_TRACE.get()
     if trace is not None:
-        trace.add_step(title, detail)
+        trace.add_step(title, detail, data=data)
 
 
 def current_trace() -> DebugTrace | None:
