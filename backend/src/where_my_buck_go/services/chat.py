@@ -237,20 +237,49 @@ class ChatService:
         self, owner: str, text: str, now: datetime, history: list[dict[str, str]], classification: dict[str, object],
     ) -> LedgerResult:
         start, end = self._range(classification, now)
-        record_step("Aggregate account totals", f"Read totals from {start.isoformat()} to {end.isoformat()}.")
         totals = self.ledger.store.aggregate(owner, start, end)
-        context = json.dumps({"question": text, "history": history, "start": start.isoformat(),
-                              "end": end.isoformat(), "totals_vnd": totals}, ensure_ascii=False)
+        category_expenses = self.ledger.store.category_totals(owner, start, end)
+        matching_txs = [
+            {
+                "date": t.fields.occurred.occurred_date.isoformat(),
+                "time": t.fields.occurred.occurred_time.strftime("%H:%M") if t.fields.occurred.occurred_time else None,
+                "period": t.fields.occurred.period,
+                "amount": str(t.fields.money.amount) if t.fields.money else "0",
+                "direction": t.fields.direction,
+                "category": t.fields.category,
+                "description": t.fields.description,
+            }
+            for t in self.ledger.store.list_transactions(owner)
+            if not t.deleted
+            and t.fields.occurred.occurred_date is not None
+            and start <= t.fields.occurred.occurred_date <= end
+        ][:50]
+        record_step(
+            "Aggregate account totals",
+            f"Read totals from {start.isoformat()} to {end.isoformat()} "
+            f"({len(category_expenses)} categories, {len(matching_txs)} transactions).",
+        )
+        context = json.dumps({
+            "question": text,
+            "history": history,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "totals_vnd": totals,
+            "category_expenses_vnd": category_expenses,
+            "transactions": matching_txs,
+        }, ensure_ascii=False)
         answer = self.model.call_function(
-            "Answer the owner's finance question using ONLY these owner-filtered totals; do not invent "
-            "transactions or claim to make changes. If no data, say so. Context: " + context,
+            "Answer the owner's finance question in natural Vietnamese using ONLY these owner-filtered totals, "
+            "category expense breakdowns, and transaction details; do not invent transactions or claim to make "
+            "changes. If no data matches their question, say so politely. Context: " + context,
             "answer_finance", _ANSWER_FIELDS,
         ).get("answer")
         if not isinstance(answer, str) or not 1 <= len(answer) <= 1000:
             raise InvalidProposal("Gemini returned an invalid read-only answer")
-        record_step("Compose response", "Returned an answer using only account-scoped totals.")
+        record_step("Compose response", "Returned an answer using only account-scoped totals and transactions.")
         return LedgerResult({"kind": "qa", "message": answer, "start": start.isoformat(),
-                             "end": end.isoformat(), "totals": totals}, 200)
+                             "end": end.isoformat(), "totals": totals,
+                             "categories": category_expenses}, 200)
 
     @staticmethod
     def _range(classification: dict[str, object], now: datetime) -> tuple[date, date]:
