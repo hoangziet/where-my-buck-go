@@ -46,9 +46,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install boto3
 
+      - name: Generate Terraform backend config
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION || 'ap-southeast-2' }}
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          cat <<EOF > infra/aws/backend.hcl
+          bucket = "wmbg-${ACCOUNT_ID}-${AWS_REGION}-tfstate"
+          key = "production/terraform.tfstate"
+          region = "${AWS_REGION}"
+          encrypt = true
+          use_lockfile = true
+          EOF
+
       - name: Initialize Terraform backend
         working-directory: infra/aws
-        run: terraform init -backend-config=backend.hcl
+        run: terraform init -input=false -backend-config=backend.hcl
 
       - name: Sync Google OAuth credentials to AWS SSM Parameter Store
         env:
