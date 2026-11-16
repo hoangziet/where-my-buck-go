@@ -27,3 +27,6 @@ infra/aws/*.auto.tfvars
 infra/aws/outputs.json
 .aws-runtime/
 infra/aws/*.auto.tfvars.json
+demo/frames/
+demo/slides.txt
+
