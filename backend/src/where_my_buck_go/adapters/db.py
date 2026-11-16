@@ -174,11 +174,11 @@ def engine_for(url: str, *, connect_args: dict[str, str] | None = None) -> Engin
                            pool_timeout=10, connect_args=connect_args or {})
 
     @event.listens_for(engine, "before_cursor_execute")
-    def capture_sql(_conn: object, _cursor: object, statement: str, _parameters: object,
+    def capture_sql(_conn: object, _cursor: object, statement: str, parameters: object,
                     _context: object, _executemany: bool) -> None:
         from where_my_buck_go.services.debug_trace import record_sql
 
-        record_sql(statement)
+        record_sql(statement, parameters)
 
     return engine
 

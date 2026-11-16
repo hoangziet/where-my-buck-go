@@ -1,8 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { MessageSquare, PanelLeftClose, Plus, Settings, LogOut } from "lucide-react";
+import {
+  MessageSquare,
+  PanelLeftClose,
+  Plus,
+  Settings,
+  LogOut,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Check,
+  X,
+} from "lucide-react";
 import { LogoMark } from "./Logo";
 import { useAuth } from "@/lib/auth-context";
 import * as api from "@/lib/api";
@@ -28,6 +39,13 @@ export function ChatSidebar({
   const { username, logout } = useAuth();
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [loading, setLoading] = useState(false);
+  const [menuOpenChatId, setMenuOpenChatId] = useState<string | null>(null);
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [savingRename, setSavingRename] = useState(false);
+  const [deletingChat, setDeletingChat] = useState<ChatSummary | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -45,6 +63,67 @@ export function ChatSidebar({
       mounted = false;
     };
   }, [activeChatId, refreshTrigger]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpenChatId(null);
+      }
+    }
+    if (menuOpenChatId) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [menuOpenChatId]);
+
+  function startRename(chat: ChatSummary, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingChatId(chat.id);
+    setEditingTitle(chat.title);
+    setMenuOpenChatId(null);
+  }
+
+  async function handleSaveRename(id: string) {
+    const trimmed = editingTitle.trim();
+    if (!trimmed) {
+      setEditingChatId(null);
+      return;
+    }
+    setSavingRename(true);
+    try {
+      await api.renameChat(id, trimmed);
+      setChats((prev) => prev.map((c) => (c.id === id ? { ...c, title: trimmed } : c)));
+      setEditingChatId(null);
+    } catch {
+      // Keep edit state on failure
+    } finally {
+      setSavingRename(false);
+    }
+  }
+
+  function startDelete(chat: ChatSummary, e: React.MouseEvent) {
+    e.stopPropagation();
+    setDeletingChat(chat);
+    setMenuOpenChatId(null);
+  }
+
+  async function handleConfirmDelete() {
+    if (!deletingChat) return;
+    const targetId = deletingChat.id;
+    setIsDeleting(true);
+    try {
+      await api.deleteChat(targetId);
+      setChats((prev) => prev.filter((c) => c.id !== targetId));
+      if (activeChatId === targetId) {
+        onNewChat?.();
+      }
+      setDeletingChat(null);
+    } catch {
+      // Failed to delete
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   return (
     <>
@@ -109,20 +188,115 @@ export function ChatSidebar({
             ) : (
               chats.map((chat) => {
                 const isActive = chat.id === activeChatId;
+                const isEditing = chat.id === editingChatId;
+                const isMenuOpen = chat.id === menuOpenChatId;
+
+                if (isEditing) {
+                  return (
+                    <div
+                      key={chat.id}
+                      className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface border border-accent"
+                    >
+                      <input
+                        type="text"
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveRename(chat.id);
+                          if (e.key === "Escape") setEditingChatId(null);
+                        }}
+                        autoFocus
+                        disabled={savingRename}
+                        className="flex-1 min-w-0 bg-transparent text-xs text-ink outline-hidden border-0 px-1 py-0.5"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveRename(chat.id)}
+                        disabled={savingRename}
+                        aria-label="Save title"
+                        className="w-6 h-6 flex items-center justify-center rounded text-accent hover:bg-accent-soft-bg transition-colors border-0 bg-transparent cursor-pointer"
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingChatId(null)}
+                        disabled={savingRename}
+                        aria-label="Cancel rename"
+                        className="w-6 h-6 flex items-center justify-center rounded text-muted hover:text-ink hover:bg-[#F4F2EC] transition-colors border-0 bg-transparent cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  );
+                }
+
                 return (
-                  <button
+                  <div
                     key={chat.id}
-                    type="button"
-                    onClick={() => onSelectChat?.(chat.id)}
-                    className={`w-full group flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-left transition-colors cursor-pointer border-0 ${
+                    className={`relative w-full group flex items-center rounded-lg text-xs transition-colors ${
                       isActive
                         ? "bg-accent-soft-bg text-accent-strong font-semibold"
                         : "bg-transparent text-ink-3 hover:bg-[#F4F2EC] hover:text-ink font-normal"
                     }`}
                   >
-                    <MessageSquare size={14} className={`shrink-0 ${isActive ? "text-accent-strong" : "text-muted group-hover:text-ink"}`} />
-                    <span className="truncate flex-1">{chat.title}</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => onSelectChat?.(chat.id)}
+                      className="flex-1 flex items-center gap-2.5 px-2.5 py-2 text-left truncate border-0 bg-transparent cursor-pointer text-inherit font-inherit min-w-0"
+                    >
+                      <MessageSquare
+                        size={14}
+                        className={`shrink-0 ${isActive ? "text-accent-strong" : "text-muted group-hover:text-ink"}`}
+                      />
+                      <span className="truncate flex-1">{chat.title}</span>
+                    </button>
+
+                    {/* Options button */}
+                    <div className="relative pr-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenChatId(isMenuOpen ? null : chat.id);
+                        }}
+                        aria-label="Chat options"
+                        className={`w-7 h-7 flex items-center justify-center rounded-md border-0 bg-transparent cursor-pointer transition-opacity ${
+                          isMenuOpen
+                            ? "opacity-100 text-ink bg-[#E8E6DE]"
+                            : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted hover:text-ink hover:bg-[#E8E6DE]"
+                        }`}
+                      >
+                        <MoreHorizontal size={15} />
+                      </button>
+
+                      {/* Dropdown Menu */}
+                      {isMenuOpen && (
+                        <div
+                          ref={menuRef}
+                          className="absolute right-0 top-8 z-50 min-w-[140px] bg-surface rounded-xl shadow-lg border border-border py-1 text-xs animate-in fade-in zoom-in-95 duration-100"
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => startRename(chat, e)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-ink hover:bg-[#F4F2EC] text-left border-0 bg-transparent cursor-pointer transition-colors"
+                          >
+                            <Pencil size={13} className="text-muted" />
+                            <span>Rename</span>
+                          </button>
+                          <div className="my-1 border-t border-border-row" />
+                          <button
+                            type="button"
+                            onClick={(e) => startDelete(chat, e)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 text-left border-0 bg-transparent cursor-pointer transition-colors"
+                          >
+                            <Trash2 size={13} className="text-red-500" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 );
               })
             )}
@@ -154,6 +328,38 @@ export function ChatSidebar({
           </div>
         </div>
       </aside>
+
+      {/* Delete Confirmation Modal */}
+      {deletingChat && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-2xl shadow-xl max-w-sm w-full p-5 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
+            <div>
+              <h3 className="m-0 text-base font-semibold text-ink">Delete chat?</h3>
+              <p className="mt-1.5 mb-0 text-xs text-muted leading-relaxed">
+                This will delete &ldquo;{deletingChat.title}&rdquo; and all messages in this conversation.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeletingChat(null)}
+                disabled={isDeleting}
+                className="px-3.5 py-2 text-xs font-medium text-ink bg-transparent hover:bg-[#F4F2EC] rounded-lg border border-border-input transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-3.5 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg border-0 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

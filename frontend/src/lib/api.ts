@@ -218,6 +218,7 @@ export interface TraceEntry {
   title: string;
   detail?: string;
   sql?: string;
+  parameters?: string;
 }
 
 export type ChatResponse = { chatId?: string; debugTrace?: TraceEntry[] } & (
@@ -255,6 +256,14 @@ export function listChats(): Promise<{ items: ChatSummary[] }> {
   return request("/api/chats");
 }
 
+export function renameChat(chatId: string, title: string): Promise<{ id: string; title: string }> {
+  return request(`/api/chats/${chatId}`, { method: "PATCH", body: { title } });
+}
+
+export function deleteChat(chatId: string): Promise<{ deleted: boolean }> {
+  return request(`/api/chats/${chatId}`, { method: "DELETE" });
+}
+
 export interface StoredMessage {
   role: "user" | "assistant";
   text: string;
@@ -290,13 +299,20 @@ export interface ImageIntakeResponse {
   kind: "image_intake";
   proposal: ProposalDto;
   message: string;
+  chatId?: string;
   debugTrace?: TraceEntry[];
 }
 
-export async function imageIntake(file: File, caption?: string, idempotencyKey?: string): Promise<ImageIntakeResponse> {
+export async function imageIntake(
+  file: File,
+  caption?: string,
+  idempotencyKey?: string,
+  chatId?: string,
+): Promise<ImageIntakeResponse> {
   const form = new FormData();
   form.append("image", file);
   if (caption) form.append("caption", caption);
+  if (chatId) form.append("chatId", chatId);
   let res: Response;
   try {
     res = await fetch("/api/chat/image-intake", {

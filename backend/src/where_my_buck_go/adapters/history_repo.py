@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from uuid import uuid4
 
-from sqlalchemy import delete, insert, select
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.engine import Engine
 
 from where_my_buck_go.adapters.db import chat_messages, chats, pinned_queries
@@ -17,6 +17,23 @@ class PostgresHistoryStore(HistoryStore):
     def create_chat(self, owner: str, chat_id: str, title: str, now: datetime) -> None:
         with self.engine.begin() as conn:
             conn.execute(insert(chats).values(id=chat_id, owner_id=owner, title=title, created_at=now))
+
+    def rename_chat(self, owner: str, chat_id: str, title: str) -> bool:
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                update(chats).where(chats.c.id == chat_id, chats.c.owner_id == owner).values(title=title)
+            )
+        return result.rowcount > 0
+
+    def delete_chat(self, owner: str, chat_id: str) -> bool:
+        with self.engine.begin() as conn:
+            conn.execute(
+                delete(chat_messages).where(chat_messages.c.chat_id == chat_id, chat_messages.c.owner_id == owner)
+            )
+            result = conn.execute(
+                delete(chats).where(chats.c.id == chat_id, chats.c.owner_id == owner)
+            )
+        return result.rowcount > 0
 
     def append_message(
         self, owner: str, chat_id: str, role: str, text: str, now: datetime,
