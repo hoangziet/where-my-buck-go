@@ -673,3 +673,70 @@ def test_pinned_queries_rerun_aggregate_and_are_owner_scoped(
     assert client.get("/api/chat/pins").json == {"items": []}
     assert client.post("/api/chat/pins", json={"title": "Bad", "start": "2026-11-30", "end": "2026-11-01"},
                        headers=headers(csrf)).status_code == 400
+
+
+def test_evidence_http_caching_and_batch_prepopulation(
+    ledger_client: tuple[FlaskClient, str, FlaskClient, str],
+) -> None:
+    client, csrf, other, other_csrf = ledger_client
+    create_and_confirm(client, csrf)
+    tx_list = client.get("/api/transactions").json["items"]
+    assert len(tx_list) == 1
+    tx = tx_list[0]
+    assert len(tx["evidenceIds"]) == 1
+    assert len(tx["evidence"]) == 1
+    assert tx["evidence"][0]["kind"] == "text"
+    ev_id = tx["evidenceIds"][0]
+
+    # First fetch: 200 OK with ETag and immutable Cache-Control
+    res = client.get(f"/api/evidence/{ev_id}")
+    assert res.status_code == 200
+    assert "ETag" in res.headers
+    assert "max-age=604800" in res.headers.get("Cache-Control", "")
+    assert "immutable" in res.headers.get("Cache-Control", "")
+    etag = res.headers["ETag"]
+
+    # Revalidation: 304 Not Modified when If-None-Match matches ETag
+    cached_res = client.get(f"/api/evidence/{ev_id}", headers={"If-None-Match": etag})
+    assert cached_res.status_code == 304
+    assert cached_res.headers["ETag"] == etag
+
+    # Single transaction details also returns evidence metadata
+    detail = client.get(f'/api/transactions/{tx["id"]}').json
+    assert detail["evidenceIds"] == [ev_id]
+    assert detail["evidence"] == [{"id": ev_id, "kind": "text"}]
+
+
+def test_chat_message_with_client_timezone_and_debug_trace_data(
+    ledger_client: tuple[FlaskClient, str, FlaskClient, str],
+) -> None:
+    client, csrf, other, other_csrf = ledger_client
+    create_and_confirm(client, csrf)
+    model = chat_model(client)
+    model.responses["route_message"] = {
+        "specialist": "qa", "date": "", "range": "this_month", "start": "", "end": "",
+    }
+    model.responses["answer_finance"] = {"answer": "Bạn đã chi 17.500 VND."}
+
+    res = client.post(
+        "/api/chat/messages",
+        json={
+            "text": "Tháng này tiêu bao nhiêu",
+            "history": [],
+            "clientTimezone": "Asia/Ho_Chi_Minh",
+            "expectedVersion": 0,
+        },
+        headers=headers(csrf),
+    )
+    assert res.status_code == 200
+    body = res.json
+    assert body["kind"] == "qa"
+    assert "debugTrace" in body
+    trace = body["debugTrace"]
+    step_with_data = [e for e in trace if e.get("kind") == "step" and "data" in e]
+    assert len(step_with_data) >= 1
+    # Check that aggregate step data recorded totals
+    agg_steps = [e for e in step_with_data if e.get("title") == "Aggregate account totals"]
+    assert len(agg_steps) == 1
+    assert "totals" in agg_steps[0]["data"]
+    assert agg_steps[0]["data"]["totals"]["expense"] == "17500"

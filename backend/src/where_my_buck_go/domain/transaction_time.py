@@ -12,6 +12,16 @@ LOCAL_ZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 _DEFAULT_HOURS: dict[Period, int] = {"sáng": 7, "trưa": 11, "chiều": 15, "tối": 20}
 
 
+def resolve_client_zone(name: str | None) -> ZoneInfo:
+    """Safely resolve an IANA timezone identifier with fallback to Asia/Ho_Chi_Minh."""
+    if name and isinstance(name, str):
+        try:
+            return ZoneInfo(name.strip())
+        except Exception:
+            pass
+    return LOCAL_ZONE
+
+
 class InvalidTransactionTime(ValueError):
     """An explicit date, time or period is invalid or contradictory."""
 
@@ -52,7 +62,9 @@ def parse_clock(value: str) -> time:
     return time(hour, minute)
 
 
-def parse_transaction_date(value: str | None, received_at: datetime) -> date | None:
+def parse_transaction_date(
+    value: str | None, received_at: datetime, zone: ZoneInfo = LOCAL_ZONE,
+) -> date | None:
     """Resolve ISO date or relative words against the captured ingress instant, never worker time."""
     if received_at.tzinfo is None or received_at.utcoffset() is None:
         raise InvalidTransactionTime("Ingress instant must be timezone-aware")
@@ -61,7 +73,7 @@ def parse_transaction_date(value: str | None, received_at: datetime) -> date | N
     if value is None or value == "":
         return None
     normalized = value.strip().casefold()
-    today = received_at.astimezone(LOCAL_ZONE).date()
+    today = received_at.astimezone(zone).date()
     if normalized in ("hôm nay", "hom nay", "today", "nay"):
         return today
     if normalized in ("hôm qua", "hom qua", "yesterday", "qua", "hqua"):
@@ -121,10 +133,11 @@ def is_period_compatible(clock: time, period: Period) -> bool:
 
 def resolve_transaction_time(
     date_text: str | None, period: str | None, time_text: str | None, received_at: datetime,
+    zone: ZoneInfo = LOCAL_ZONE,
 ) -> TransactionTime:
     """Return a draft-ready time and provenance; never infer a missing date."""
-    occurred_date = parse_transaction_date(date_text, received_at)
-    if occurred_date is not None and occurred_date > received_at.astimezone(LOCAL_ZONE).date():
+    occurred_date = parse_transaction_date(date_text, received_at, zone=zone)
+    if occurred_date is not None and occurred_date > received_at.astimezone(zone).date():
         raise InvalidTransactionTime("Transaction date must not be in the future")
     stated_period = parse_period(period)
     if time_text is not None and time_text != "":

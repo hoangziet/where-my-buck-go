@@ -3,10 +3,16 @@
 import json
 from datetime import date, datetime, timedelta
 from typing import Protocol
+from zoneinfo import ZoneInfo
 
 from where_my_buck_go.domain.ledger import InvalidProposal
 from where_my_buck_go.domain.money import InvalidMoney
-from where_my_buck_go.domain.transaction_time import LOCAL_ZONE, InvalidTransactionTime, parse_transaction_date
+from where_my_buck_go.domain.transaction_time import (
+    LOCAL_ZONE,
+    InvalidTransactionTime,
+    parse_transaction_date,
+    resolve_client_zone,
+)
 from where_my_buck_go.services.debug_trace import current_trace, record_step
 from where_my_buck_go.services.history import HistoryService
 from where_my_buck_go.services.ledger import LedgerResult, LedgerService, LedgerSession, transaction_view
@@ -69,6 +75,7 @@ class ChatService:
     def respond(
         self, owner: str, key: str, text: str, now: datetime, history: list[dict[str, str]],
         chat_id: str | None = None,
+        client_timezone: str | None = None,
     ) -> LedgerResult:
         if not 1 <= len(text) <= 2000 or len(history) > 8:
             raise InvalidProposal("Message must be 1-2000 characters; history at most eight turns")
@@ -79,7 +86,8 @@ class ChatService:
         body: dict[str, object] = {"text": text, "history": history, "expectedVersion": 0}
 
         def coordinate(tx: LedgerSession, written: list[str]) -> LedgerResult:
-            local_date = now.astimezone(LOCAL_ZONE).date().isoformat()
+            client_zone = resolve_client_zone(client_timezone)
+            local_date = now.astimezone(client_zone).date().isoformat()
             classification = self.model.call_function(
                 "Route this message in any language (Vietnamese with/without accents, English, etc.). "
                 "Financial questions or summaries -> qa, new income/expense transactions -> intake, "
@@ -94,13 +102,13 @@ class ChatService:
                 "qa": "a financial question", "intake": "a new transaction", "change": "a transaction change",
             }
             label = specialist_label.get(str(specialist), "a question")
-            record_step("Classify request", f"Gemini routed this as {label}.")
+            record_step("Classify request", f"Gemini routed this as {label}.", data={"specialist": specialist})
             if specialist == "intake":
-                result = self._intake(tx, written, owner, text, now)
+                result = self._intake(tx, written, owner, text, now, client_zone=client_zone)
             elif specialist == "change":
-                result = self._change(tx, written, owner, text, now)
+                result = self._change(tx, written, owner, text, now, client_zone=client_zone)
             else:
-                result = self._answer(owner, text, now, history, classification)
+                result = self._answer(owner, text, now, history, classification, client_zone=client_zone)
             if self.history is not None:
                 actual_chat_id = self.history.start_or_continue(owner, chat_id, text, now)
                 assistant_text = result.body.get("message")
@@ -126,8 +134,9 @@ class ChatService:
 
     def _intake(
         self, tx: LedgerSession, written: list[str], owner: str, text: str, now: datetime,
+        client_zone: ZoneInfo = LOCAL_ZONE,
     ) -> LedgerResult:
-        local_date = now.astimezone(LOCAL_ZONE).date().isoformat()
+        local_date = now.astimezone(client_zone).date().isoformat()
         parsed = self.model.call_function(
             "Extract each independent income or expense from this message into separate items. "
             "The message can be in any language (Vietnamese with or without accents, English, etc.). "
@@ -135,8 +144,8 @@ class ChatService:
             "Use canonical integer VND digits for 'amount'. "
             "For 'occurredDate': Analyze any relative or explicit date mentioned (e.g. 'hôm nay', 'hom nay', "
             "'today', 'hôm qua', 'hom qua', 'yesterday', 'tối qua', 'last Friday', etc.) and resolve it "
-            f"directly into an explicit 'YYYY-MM-DD' date based on today's reference date: {local_date} "
-            "(Asia/Ho_Chi_Minh). If the message does not state a date or day word, leave 'occurredDate' "
+            f"directly into an explicit 'YYYY-MM-DD' date based on today's reference date: {local_date}. "
+            "If the message does not state a date or day word, leave 'occurredDate' "
             f"as an empty string (do not invent a date). Never emit a future date beyond {local_date}. "
             "For 'period': Normalize any time-of-day mention across any language (e.g. morning/am/sáng/sang -> "
             "'sáng', noon/lunch/trưa/trua -> 'trưa', afternoon/pm/chiều/chieu -> 'chiều', evening/night/tối/toi "
@@ -152,7 +161,11 @@ class ChatService:
         items = parsed.get("items")
         if not isinstance(items, list) or not 1 <= len(items) <= 10:
             raise InvalidProposal("Gemini must return 1-10 independent transaction items")
-        record_step("Extract transaction fields", f"Gemini returned {len(items)} structured item(s).")
+        record_step(
+            "Extract transaction fields",
+            f"Gemini returned {len(items)} structured item(s).",
+            data={"itemCount": len(items), "items": items},
+        )
         proposals: list[dict[str, object]] = []
         errors: list[dict[str, object]] = []
         for index, item in enumerate(items):
@@ -169,17 +182,22 @@ class ChatService:
                 errors.append({"index": index, "error": str(error)})
         message = ("Đã tạo bản nháp; từng khoản cần xác nhận riêng." if proposals else
                    "Chưa tạo bản nháp. Kiểm tra lại các khoản không hợp lệ.")
-        record_step("Validate draft", f"Prepared {len(proposals)} draft(s); {len(errors)} item(s) need correction.")
+        record_step(
+            "Validate draft",
+            f"Prepared {len(proposals)} draft(s); {len(errors)} item(s) need correction.",
+            data={"draftCount": len(proposals), "errorCount": len(errors)},
+        )
         return LedgerResult({"kind": "intake", "proposals": proposals, "errors": errors, "message": message}, 200)
 
     def _change(
         self, tx: LedgerSession, written: list[str], owner: str, text: str, now: datetime,
+        client_zone: ZoneInfo = LOCAL_ZONE,
     ) -> LedgerResult:
-        local_date = now.astimezone(LOCAL_ZONE).date().isoformat()
+        local_date = now.astimezone(client_zone).date().isoformat()
         match = self.model.call_function(
             "The owner wants to edit, delete or undo a past transaction. The message can be in any language. "
             "Identify the operation and enough of the description to find it among their own transactions. "
-            f"For matchDate, resolve to YYYY-MM-DD based on today's date {local_date} (Asia/Ho_Chi_Minh) if a "
+            f"For matchDate, resolve to YYYY-MM-DD based on today's date {local_date} if a "
             "relative date (hôm nay, yesterday, etc.) or specific date was mentioned; empty string if the "
             "owner did not say a date. Message: " + text,
             "match_transaction", _CHANGE_MATCH_FIELDS,
@@ -187,14 +205,14 @@ class ChatService:
         operation = match.get("operation")
         if operation not in ("edit", "delete", "undo"):
             raise InvalidProposal("Gemini must select edit, delete or undo")
-        record_step("Identify requested change", f"Gemini selected {operation}.")
+        record_step("Identify requested change", f"Gemini selected {operation}.", data={"operation": operation})
         match_description, match_date_text = match.get("matchDescription"), match.get("matchDate")
         if not isinstance(match_description, str) or not isinstance(match_date_text, str):
             raise InvalidProposal("Match fields must be text")
         match_date: date | None = None
         if match_date_text:
             try:
-                match_date = parse_transaction_date(match_date_text, now)
+                match_date = parse_transaction_date(match_date_text, now, zone=client_zone)
             except InvalidTransactionTime:
                 match_date = None
         candidates = [
@@ -203,7 +221,11 @@ class ChatService:
             and (not match_description or match_description.casefold() in t.fields.description.casefold())
             and (match_date is None or t.fields.occurred.occurred_date == match_date)
         ]
-        record_step("Find matching transactions", f"Found {len(candidates)} matching transaction(s) in this account.")
+        record_step(
+            "Find matching transactions",
+            f"Found {len(candidates)} matching transaction(s) in this account.",
+            data={"matchCount": len(candidates)},
+        )
         if not candidates:
             return LedgerResult({
                 "kind": "needs_selection", "candidates": [],
@@ -242,8 +264,9 @@ class ChatService:
 
     def _answer(
         self, owner: str, text: str, now: datetime, history: list[dict[str, str]], classification: dict[str, object],
+        client_zone: ZoneInfo = LOCAL_ZONE,
     ) -> LedgerResult:
-        start, end = self._range(classification, now)
+        start, end = self._range(classification, now, client_zone=client_zone)
         totals = self.ledger.store.aggregate(owner, start, end)
         category_expenses = self.ledger.store.category_totals(owner, start, end)
         matching_txs = [
@@ -265,6 +288,13 @@ class ChatService:
             "Aggregate account totals",
             f"Read totals from {start.isoformat()} to {end.isoformat()} "
             f"({len(category_expenses)} categories, {len(matching_txs)} transactions).",
+            data={
+                "range": {"start": start.isoformat(), "end": end.isoformat()},
+                "totals": totals,
+                "categoryCount": len(category_expenses),
+                "categories": category_expenses,
+                "transactionCount": len(matching_txs),
+            },
         )
         context = json.dumps({
             "question": text,
@@ -291,8 +321,10 @@ class ChatService:
                              "categories": category_expenses}, 200)
 
     @staticmethod
-    def _range(classification: dict[str, object], now: datetime) -> tuple[date, date]:
-        local = now.astimezone(LOCAL_ZONE).date()
+    def _range(
+        classification: dict[str, object], now: datetime, client_zone: ZoneInfo = LOCAL_ZONE,
+    ) -> tuple[date, date]:
+        local = now.astimezone(client_zone).date()
         period = classification.get("range")
         if period == "today":
             return local, local
@@ -307,8 +339,8 @@ class ChatService:
             first, last = classification.get("start"), classification.get("end")
             if isinstance(first, str) and isinstance(last, str):
                 try:
-                    parsed_start = parse_transaction_date(first, now)
-                    parsed_end = parse_transaction_date(last, now)
+                    parsed_start = parse_transaction_date(first, now, zone=client_zone)
+                    parsed_end = parse_transaction_date(last, now, zone=client_zone)
                     if (parsed_start is not None and parsed_end is not None and
                             0 <= (parsed_end - parsed_start).days <= 366):
                         return parsed_start, parsed_end
@@ -319,7 +351,7 @@ class ChatService:
         if not isinstance(date_hint, str):
             date_hint = ""
         try:
-            selected = parse_transaction_date(date_hint or None, now)
+            selected = parse_transaction_date(date_hint or None, now, zone=client_zone)
         except InvalidTransactionTime:
             selected = None  # An untrusted model hint must not turn a valid question into an error.
         return (selected, selected) if selected else (local.replace(day=1), local)

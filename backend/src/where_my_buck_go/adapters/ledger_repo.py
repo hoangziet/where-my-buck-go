@@ -192,6 +192,24 @@ class PostgresLedgerStore(LedgerStore):
             )).scalars().all()
         return list(rows)
 
+    def list_evidence_batch(self, owner: str, transaction_ids: list[str]) -> dict[str, list[dict[str, str]]]:
+        if not transaction_ids:
+            return {}
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                select(evidence.c.transaction_id, evidence.c.id, evidence.c.kind).where(
+                    evidence.c.owner_id == owner,
+                    evidence.c.transaction_id.in_(transaction_ids),
+                ).order_by(evidence.c.id)
+            ).all()
+        result: dict[str, list[dict[str, str]]] = {tx_id: [] for tx_id in transaction_ids}
+        for tx_id, ev_id, kind in rows:
+            if tx_id in result:
+                kind_str = str(kind) if kind is not None else ""
+                simplified_kind = "image" if kind_str.startswith("image/") else "text"
+                result[tx_id].append({"id": str(ev_id), "kind": simplified_kind})
+        return result
+
     def aggregate(self, owner: str, start: date, end: date) -> dict[str, str]:
         with self.engine.connect() as conn:
             rows = conn.execute(select(transactions.c.direction, func.sum(transactions.c.amount)).where(
