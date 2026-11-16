@@ -218,6 +218,7 @@ export interface TraceEntry {
   title: string;
   detail?: string;
   sql?: string;
+  inlinedSql?: string;
   parameters?: string;
 }
 

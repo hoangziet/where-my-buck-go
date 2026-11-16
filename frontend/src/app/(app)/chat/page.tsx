@@ -396,7 +396,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
               <AiMessage key={i}>
                 {m.kind === "qa" && (
                   <>
-                    <p className="m-0">{m.text}</p>
+                    <FormattedMessage text={m.text} />
                     {m.start && m.end && (
                       <button
                         type="button"
@@ -415,10 +415,10 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
                   </>
                 )}
                 {m.kind === "error" && <p role="alert" className="m-0 text-danger">{m.text}</p>}
-                {m.kind === "stored" && <p className="m-0">{m.text}</p>}
+                {m.kind === "stored" && <FormattedMessage text={m.text} />}
                 {m.kind === "needs_selection" && (
                   <>
-                    <p className="m-0">{m.text}</p>
+                    <FormattedMessage text={m.text} />
                     {m.candidates.map((c) => (
                       <CandidateCard
                         key={c.id}
@@ -431,7 +431,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
                 )}
                 {m.kind === "change" && (
                   <>
-                    <p className="m-0">{m.text}</p>
+                    <FormattedMessage text={m.text} />
                     <ProposalCard
                       proposal={m.proposal}
                       state={confirmState[m.proposal.id]}
@@ -442,7 +442,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
                 )}
                 {m.kind === "intake" && (
                   <>
-                    <p className="m-0">{m.text}</p>
+                    <FormattedMessage text={m.text} />
                     {m.proposals.map((p) => (
                       <ProposalCard
                         key={p.id}
@@ -591,7 +591,7 @@ function UserBubble({ children, imagePreviewUrl }: { children: React.ReactNode; 
         <img src={imagePreviewUrl} alt="Attached receipt" className="max-w-[220px] max-h-[220px] rounded-[14px] object-cover" />
       )}
       {children && (
-        <div className="bg-ink text-white px-4 py-3 rounded-[16px_16px_4px_16px]">{children}</div>
+        <div className="bg-ink text-white px-4 py-3 rounded-[16px_16px_4px_16px] whitespace-pre-wrap">{children}</div>
       )}
     </div>
   );
@@ -602,6 +602,120 @@ function AiMessage({ children }: { children: React.ReactNode }) {
     <div className="flex gap-3.5 items-start">
       <LogoMark size={30} />
       <div className="flex-1 min-w-0 flex flex-col gap-3">{children}</div>
+    </div>
+  );
+}
+
+function FormattedMessage({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const blocks: ({ type: "text"; lines: string[] } | { type: "table"; headers: string[]; rows: string[][] })[] = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const trimmed = lines[i].trim();
+    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+      const headers = trimmed.slice(1, -1).split("|").map((c) => c.trim());
+      if (i + 1 < lines.length && lines[i + 1].trim().startsWith("|") && lines[i + 1].includes("-")) {
+        i += 2;
+        const rows: string[][] = [];
+        while (i < lines.length && lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|")) {
+          const cells = lines[i].trim().slice(1, -1).split("|").map((c) => c.trim());
+          rows.push(cells);
+          i++;
+        }
+        blocks.push({ type: "table", headers, rows });
+        continue;
+      }
+    }
+    const last = blocks[blocks.length - 1];
+    if (last && last.type === "text") {
+      last.lines.push(lines[i]);
+    } else {
+      blocks.push({ type: "text", lines: [lines[i]] });
+    }
+    i++;
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5 text-inherit">
+      {blocks.map((block, idx) => {
+        if (block.type === "table") {
+          return (
+            <div key={idx} className="my-1.5 overflow-x-auto rounded-xl border border-border bg-surface shadow-xs">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[#F4F2EC] text-ink font-semibold border-b border-border">
+                    {block.headers.map((h, hIdx) => (
+                      <th key={hIdx} className="px-3.5 py-2 whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-row">
+                  {block.rows.map((row, rIdx) => (
+                    <tr key={rIdx} className="hover:bg-[#FAF9F5] transition-colors">
+                      {row.map((cell, cIdx) => (
+                        <td key={cIdx} className="px-3.5 py-2 text-ink-2 whitespace-nowrap">
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+        const paragraph = block.lines.join("\n").trim();
+        if (!paragraph) return null;
+        return (
+          <p key={idx} className="m-0 leading-relaxed whitespace-pre-wrap">
+            {paragraph}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function ParametersTable({ rawParams }: { rawParams: string }) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawParams);
+  } catch {
+    parsed = null;
+  }
+
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const entries = Object.entries(parsed as Record<string, unknown>);
+    if (entries.length === 0) return null;
+    return (
+      <div className="mt-2 overflow-x-auto rounded-lg border border-border bg-surface">
+        <table className="w-full text-left text-[11px] font-mono border-collapse">
+          <thead>
+            <tr className="bg-[#EFECE6] text-ink-2 border-b border-border">
+              <th className="px-2.5 py-1.5 font-semibold text-muted text-[10px] uppercase tracking-wider">Parameter</th>
+              <th className="px-2.5 py-1.5 font-semibold text-muted text-[10px] uppercase tracking-wider">Value</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-row">
+            {entries.map(([key, val]) => (
+              <tr key={key} className="hover:bg-[#F9F8F5]">
+                <td className="px-2.5 py-1.5 text-ink font-medium select-all">{key}</td>
+                <td className="px-2.5 py-1.5 text-accent-strong select-all">{typeof val === "object" ? JSON.stringify(val) : String(val)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1.5 px-3 py-2 rounded-lg bg-[#EFECE6] text-[11px] font-mono text-ink-2 break-all">
+      <span className="font-semibold text-muted select-none">PARAMS: </span>
+      <span>{rawParams}</span>
     </div>
   );
 }
@@ -624,19 +738,29 @@ function TracePanel({ entries }: { entries: TraceEntry[] }) {
             </div>
             {entry.detail && <p className="mt-1 mb-0 text-xs text-muted">{entry.detail}</p>}
             {entry.sql && (
-              <pre className="mt-2 mb-0 overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-[#17211B] p-3 text-[11px] leading-relaxed text-[#E6F1E9]">
-                <code>{entry.sql}</code>
-              </pre>
-            )}
-            {entry.parameters && (
-              <div className="mt-1.5 px-3 py-2 rounded-lg bg-[#EFECE6] text-[11px] font-mono text-ink-2 break-all">
-                <span className="font-semibold text-muted select-none">PARAMS: </span>
-                <span>{entry.parameters}</span>
+              <div className="mt-2 flex flex-col gap-2">
+                {entry.inlinedSql && (
+                  <div>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">Executed Query (With Parameters)</span>
+                    <pre className="mt-1 mb-0 overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-[#17211B] p-3 text-[11px] leading-relaxed text-[#E6F1E9]">
+                      <code>{entry.inlinedSql}</code>
+                    </pre>
+                  </div>
+                )}
+                {(!entry.inlinedSql || entry.inlinedSql !== entry.sql) && (
+                  <div>
+                    {entry.inlinedSql && <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">SQL Template</span>}
+                    <pre className="mt-1 mb-0 overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-[#17211B] p-3 text-[11px] leading-relaxed text-[#A2B8A6]">
+                      <code>{entry.sql}</code>
+                    </pre>
+                  </div>
+                )}
               </div>
             )}
+            {entry.parameters && <ParametersTable rawParams={entry.parameters} />}
           </div>
         ))}
-        <p className="m-0 px-3.5 py-2.5 text-[11px] text-muted">These are system actions, not the model&apos;s private reasoning. SQL queries and parameters are shown above.</p>
+        <p className="m-0 px-3.5 py-2.5 text-[11px] text-muted">These are system actions, not the model&apos;s private reasoning. SQL queries and parameter tables are shown above.</p>
       </div>
     </details>
   );
