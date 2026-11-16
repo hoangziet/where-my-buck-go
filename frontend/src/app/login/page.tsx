@@ -40,7 +40,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg px-4">
+    <div className="min-h-dvh flex items-center justify-center bg-bg px-4 py-8">
       <div className="w-full max-w-[380px] flex flex-col gap-7">
         <div className="flex flex-col items-center gap-3">
           <LogoMark size={40} />
