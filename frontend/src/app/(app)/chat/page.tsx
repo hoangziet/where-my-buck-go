@@ -30,7 +30,7 @@ type Message = { role: "user"; text: string; imagePreviewUrl?: string } | Assist
 
 type ChatRetry =
   | { kind: "text"; text: string; history: ChatHistoryItem[]; chatId?: string; idempotencyKey: string }
-  | { kind: "image"; file: File; caption: string; idempotencyKey: string };
+  | { kind: "image"; file: File; caption: string; chatId?: string; idempotencyKey: string };
 
 type ConfirmState = Record<
   string,
@@ -242,8 +242,9 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
     const request = previousRetry?.kind === "image"
       && previousRetry.file === file
       && previousRetry.caption === caption
+      && previousRetry.chatId === chatId
       ? previousRetry
-      : { kind: "image" as const, file, caption, idempotencyKey: crypto.randomUUID() };
+      : { kind: "image" as const, file, caption, chatId, idempotencyKey: crypto.randomUUID() };
     const isRetry = request === previousRetry;
     setInput("");
     setPendingImage(null);
@@ -251,11 +252,18 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
     if (!isRetry) setMessages((prev) => [...prev, { role: "user", text: caption, imagePreviewUrl: previewUrl }]);
     setSending(true);
     try {
-      const res = await api.imageIntake(file, caption || undefined, request.idempotencyKey);
+      const res = await api.imageIntake(file, caption || undefined, request.idempotencyKey, chatId);
+      if (res.chatId && res.chatId !== chatId) {
+        setChatId(res.chatId);
+        ownedChatId.current = res.chatId;
+        setRefreshSidebarTrigger((prev) => prev + 1);
+        router.replace(`/chat?id=${res.chatId}`);
+      }
       setMessages((prev) => [...prev, {
         role: "assistant", kind: "image_intake", text: res.message, proposal: res.proposal,
         debugTrace: res.debugTrace,
       }]);
+      pushHistory(caption || "Hình ảnh hóa đơn", res.message);
       retryRequest.current = null;
     } catch (err) {
       retryRequest.current = request;

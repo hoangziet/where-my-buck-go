@@ -203,6 +203,26 @@ def ledger_blueprint(
             raise NotFound
         return jsonify(items=messages), 200
 
+    @api.route("/chats/<identifier>", methods=["PATCH"])
+    def rename_chat(identifier: str) -> tuple[Response, int]:
+        if history is None:
+            return jsonify(error="Chat history is not configured"), 503
+        body = payload()
+        title = body.get("title")
+        if not isinstance(title, str) or not title.strip() or len(title.strip()) > 200:
+            raise InvalidProposal("title must be between 1 and 200 characters")
+        if not history.rename_chat(owner(), identifier, title.strip()):
+            raise NotFound
+        return jsonify(id=identifier, title=title.strip()), 200
+
+    @api.route("/chats/<identifier>", methods=["DELETE"])
+    def delete_chat(identifier: str) -> tuple[Response, int]:
+        if history is None:
+            return jsonify(error="Chat history is not configured"), 503
+        if not history.delete_chat(owner(), identifier):
+            raise NotFound
+        return jsonify(deleted=True), 200
+
     @api.route("/chat/pins", methods=["POST"])
     def create_pin() -> tuple[Response, int]:
         if history is None:
@@ -237,11 +257,14 @@ def ledger_blueprint(
     def image_intake() -> tuple[Response, int]:
         if chat is None:
             return jsonify(error="Gemini chat is not configured"), 503
-        if set(request.files) != {"image"} or not set(request.form) <= {"caption"}:
+        if set(request.files) != {"image"} or not set(request.form) <= {"caption", "chatId"}:
             raise InvalidProposal("One PNG or JPEG image is required")
         caption = request.form.get("caption", "").strip()
+        chat_id = (request.form.get("chatId") or "").strip() or None
         if len(caption) > 500:
             raise InvalidProposal("Caption must be at most 500 characters")
+        if chat_id is not None and not isinstance(chat_id, str):
+            raise InvalidProposal("chatId must be text")
         idempotency_key = key()
         raw = request.files["image"].read(4_000_001)
         with capture_debug_trace() as trace:
@@ -261,7 +284,21 @@ def ledger_blueprint(
             )
             draft = service.create_from_image(owner(), idempotency_key, fields, raw, mime, datetime.now(timezone.utc))
             record_step("Prepare draft", "Created a review card; no transaction is confirmed.")
+
+        actual_chat_id: str | None = None
+        if history is not None:
+            now = datetime.now(timezone.utc)
+            title_hint = caption or (preview.description if hasattr(preview, "description") else "") or "Hóa đơn"
+            actual_chat_id = history.start_or_continue(owner(), chat_id, title_hint, now)
+            user_msg = caption if caption else f"[Hóa đơn: {preview.description}]"
+            assistant_msg = "Đã tạo bản nháp từ ảnh; cần xác nhận riêng."
+            history.record_exchange(
+                owner(), actual_chat_id, user_msg, assistant_msg, now,
+                debug_trace=trace.snapshot(),
+            )
+
         return jsonify(kind="image_intake", proposal=draft.body,
+                       chatId=actual_chat_id,
                        message="Đã tạo bản nháp từ ảnh; cần xác nhận riêng.",
                        debugTrace=trace.snapshot()), draft.status
 

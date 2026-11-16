@@ -33,6 +33,8 @@ class PinRecord:
 
 class HistoryStore(Protocol):
     def create_chat(self, owner: str, chat_id: str, title: str, now: datetime) -> None: ...
+    def rename_chat(self, owner: str, chat_id: str, title: str) -> bool: ...
+    def delete_chat(self, owner: str, chat_id: str) -> bool: ...
     def append_message(
         self, owner: str, chat_id: str, role: str, text: str, now: datetime,
         debug_trace: list[dict[str, str]] | None = None,
@@ -57,6 +59,15 @@ class HistoryService:
         title = title_hint.strip()[:80] or "New chat"
         self.store.create_chat(owner, new_id, title, now)
         return new_id
+
+    def rename_chat(self, owner: str, chat_id: str, title: str) -> bool:
+        clean = title.strip()[:200]
+        if not clean:
+            return False
+        return self.store.rename_chat(owner, chat_id, clean)
+
+    def delete_chat(self, owner: str, chat_id: str) -> bool:
+        return self.store.delete_chat(owner, chat_id)
 
     def record_exchange(
         self, owner: str, chat_id: str, user_text: str, assistant_text: str, now: datetime,

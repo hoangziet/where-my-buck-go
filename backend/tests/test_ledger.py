@@ -551,6 +551,12 @@ def test_image_intake_creates_draft_with_image_evidence(
     assert response.status_code == 201
     assert any(step["title"] == "Read receipt image" for step in response.json["debugTrace"])
     assert any(step["kind"] == "sql" for step in response.json["debugTrace"])
+    image_chat_id = response.json.get("chatId")
+    assert image_chat_id is not None
+    chat_items = client.get(f"/api/chats/{image_chat_id}/messages").json["items"]
+    assert len(chat_items) == 2
+    assert chat_items[0]["text"] == "[Hóa đơn: Nap data]"
+    assert chat_items[1]["text"] == "Đã tạo bản nháp từ ảnh; cần xác nhận riêng."
     proposal = response.json["proposal"]
     assert proposal["amount"] == "17500" and proposal["category"] == "bills" and proposal["canConfirm"] is True
     assert client.get("/api/transactions").json == {"items": []}
@@ -606,7 +612,7 @@ def test_image_intake_failed_provider_can_retry_same_key_without_draft(
 def test_chat_history_is_persisted_and_owner_scoped(
     ledger_client: tuple[FlaskClient, str, FlaskClient, str],
 ) -> None:
-    client, csrf, other, _ = ledger_client
+    client, csrf, other, other_csrf = ledger_client
     model = chat_model(client)
     model.responses = {"route_message": {"specialist": "qa", "date": ""},
                        "answer_finance": {"answer": "Chưa có dữ liệu."}}
@@ -627,6 +633,24 @@ def test_chat_history_is_persisted_and_owner_scoped(
 
     assert other.get("/api/chats").json == {"items": []}
     assert other.get(f"/api/chats/{chat_id}/messages").status_code == 404
+
+    # Cross-owner rename and delete isolation
+    assert other.patch(f"/api/chats/{chat_id}", json={"title": "Hacked"},
+                       headers=headers(other_csrf)).status_code == 404
+    assert other.delete(f"/api/chats/{chat_id}", headers=headers(other_csrf)).status_code == 404
+
+    # Owner can rename chat
+    renamed = client.patch(f"/api/chats/{chat_id}", json={"title": "Đã đổi tên"},
+                           headers=headers(csrf))
+    assert renamed.status_code == 200
+    assert renamed.json == {"id": chat_id, "title": "Đã đổi tên"}
+    assert client.get("/api/chats").json["items"][0]["title"] == "Đã đổi tên"
+
+    # Owner can delete chat
+    deleted = client.delete(f"/api/chats/{chat_id}", headers=headers(csrf))
+    assert deleted.status_code == 200
+    assert client.get("/api/chats").json["items"] == []
+    assert client.get(f"/api/chats/{chat_id}/messages").status_code == 404
 
 
 def test_pinned_queries_rerun_aggregate_and_are_owner_scoped(
