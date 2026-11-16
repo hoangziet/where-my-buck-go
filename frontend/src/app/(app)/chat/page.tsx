@@ -487,7 +487,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 lg:static lg:mt-2 px-4 pb-4 pt-2 lg:px-8 bg-bg lg:bg-transparent">
+      <div className="fixed bottom-0 left-0 right-0 lg:static lg:mt-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 lg:px-8 bg-bg lg:bg-transparent">
         <div className="w-full max-w-[860px] mx-auto flex flex-col gap-2">
           <form
             onSubmit={(e) => {
@@ -526,7 +526,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
                   handleSend();
                 }
               }}
-              className="text-[15px] border-0 outline-none resize-none bg-transparent text-ink px-0.5 py-1"
+              className="text-[16px] sm:text-[15px] border-0 outline-none resize-none bg-transparent text-ink px-0.5 py-1"
             />
             <div className="flex items-center justify-between gap-2">
               <div className="flex gap-1">

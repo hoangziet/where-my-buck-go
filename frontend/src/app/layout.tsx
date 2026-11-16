@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { Inter, Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/auth-context";
@@ -23,9 +23,31 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+  themeColor: "#1F6B44",
+};
+
 export const metadata: Metadata = {
   title: "Where My Buck Go",
   description: "AI personal finance manager — chat your expenses, snap receipts, ask questions.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Where My Buck Go",
+  },
+  icons: {
+    apple: [
+      {
+        url: "/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
