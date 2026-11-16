@@ -218,6 +218,7 @@ export interface TraceEntry {
   title: string;
   detail?: string;
   sql?: string;
+  parameters?: string;
 }
 
 export type ChatResponse = { chatId?: string; debugTrace?: TraceEntry[] } & (

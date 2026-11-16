@@ -628,9 +628,15 @@ function TracePanel({ entries }: { entries: TraceEntry[] }) {
                 <code>{entry.sql}</code>
               </pre>
             )}
+            {entry.parameters && (
+              <div className="mt-1.5 px-3 py-2 rounded-lg bg-[#EFECE6] text-[11px] font-mono text-ink-2 break-all">
+                <span className="font-semibold text-muted select-none">PARAMS: </span>
+                <span>{entry.parameters}</span>
+              </div>
+            )}
           </div>
         ))}
-        <p className="m-0 px-3.5 py-2.5 text-[11px] text-muted">These are system actions, not the model&apos;s private reasoning. SQL values are hidden.</p>
+        <p className="m-0 px-3.5 py-2.5 text-[11px] text-muted">These are system actions, not the model&apos;s private reasoning. SQL queries and parameters are shown above.</p>
       </div>
     </details>
   );
