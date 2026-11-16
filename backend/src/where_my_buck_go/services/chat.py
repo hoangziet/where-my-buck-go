@@ -79,12 +79,14 @@ class ChatService:
         body: dict[str, object] = {"text": text, "history": history, "expectedVersion": 0}
 
         def coordinate(tx: LedgerSession, written: list[str]) -> LedgerResult:
+            local_date = now.astimezone(LOCAL_ZONE).date().isoformat()
             classification = self.model.call_function(
-                "Route this message. Financial questions -> qa, new income/expense -> intake, "
+                "Route this message in any language (Vietnamese with/without accents, English, etc.). "
+                "Financial questions or summaries -> qa, new income/expense transactions -> intake, "
                 "edit/delete/undo requests -> change. Ambiguous input -> qa. For questions select "
                 "today, yesterday, this_month, last_month or a custom date range with YYYY-MM-DD bounds; "
                 "for a single date use single_day and date. Do not guess missing dates. "
-                f"Local date: {now.astimezone(LOCAL_ZONE).date().isoformat()}. Message: " + text,
+                f"Local date: {local_date}. Message: " + text,
                 "route_message", _ROUTE_FIELDS,
             )
             specialist = classification.get("specialist")
@@ -125,20 +127,22 @@ class ChatService:
     def _intake(
         self, tx: LedgerSession, written: list[str], owner: str, text: str, now: datetime,
     ) -> LedgerResult:
+        local_date = now.astimezone(LOCAL_ZONE).date().isoformat()
         parsed = self.model.call_function(
-            "Extract each independent income or expense from this Vietnamese message into separate items. "
+            "Extract each independent income or expense from this message into separate items. "
+            "The message can be in any language (Vietnamese with or without accents, English, etc.). "
             "Preserve the user's shared date and time across all items unless they explicitly differ. "
-            "Use canonical integer VND digits. For the date field, prefer passing through the literal word "
-            "hôm nay or hôm qua exactly as written when the owner used one of those words — do not compute "
-            "an absolute date yourself for them. Only emit an explicit YYYY-MM-DD when the owner stated a "
-            "specific date or a different relative date; if you do, it must be on or before "
-            f"{now.astimezone(LOCAL_ZONE).date().isoformat()} (today, Asia/Ho_Chi_Minh), never a future or "
-            "unrelated year. "
-            "A time-of-day word (sáng/trưa/chiều/tối) goes ONLY in 'period', never in 'occurredTime'. "
-            "'occurredTime' is strict 24-hour HH:MM and must be left empty unless the message states an "
-            "explicit clock number (e.g. '7h30 sáng' -> period 'sáng', occurredTime '07:30'; '19h' -> "
-            "occurredTime '19:00'); a bare period word alone keeps occurredTime empty. "
-            "Use empty strings for missing amount/date/period/time, never infer a date from message time. "
+            "Use canonical integer VND digits for 'amount'. "
+            "For 'occurredDate': Analyze any relative or explicit date mentioned (e.g. 'hôm nay', 'hom nay', "
+            "'today', 'hôm qua', 'hom qua', 'yesterday', 'tối qua', 'last Friday', etc.) and resolve it "
+            f"directly into an explicit 'YYYY-MM-DD' date based on today's reference date: {local_date} "
+            "(Asia/Ho_Chi_Minh). If the message does not state a date or day word, leave 'occurredDate' "
+            f"as an empty string (do not invent a date). Never emit a future date beyond {local_date}. "
+            "For 'period': Normalize any time-of-day mention across any language (e.g. morning/am/sáng/sang -> "
+            "'sáng', noon/lunch/trưa/trua -> 'trưa', afternoon/pm/chiều/chieu -> 'chiều', evening/night/tối/toi "
+            "-> 'tối') into exactly one of: 'sáng', 'trưa', 'chiều', 'tối', or empty string if not mentioned. "
+            "For 'occurredTime': Extract any explicit clock time (e.g. '7h30', '7:30 am', '19h', '6pm' -> "
+            "'18:00') into strict 24-hour HH:MM format; leave empty string if no clock number was stated. "
             "Assign each item exactly one category from: food_drink (ăn uống), transport (đi lại), "
             "bills (hoá đơn, điện nước, internet), shopping (mua sắm), entertainment (giải trí), "
             "housing (nhà ở, thuê nhà), income (mọi khoản thu), other (không rõ). "
@@ -171,10 +175,13 @@ class ChatService:
     def _change(
         self, tx: LedgerSession, written: list[str], owner: str, text: str, now: datetime,
     ) -> LedgerResult:
+        local_date = now.astimezone(LOCAL_ZONE).date().isoformat()
         match = self.model.call_function(
-            "The owner wants to edit, delete or undo a past transaction. Identify the operation and enough "
-            "of the description to find it among their own transactions. Use hôm nay/hôm qua or YYYY-MM-DD "
-            "for matchDate; empty string if the owner did not say a date. Message: " + text,
+            "The owner wants to edit, delete or undo a past transaction. The message can be in any language. "
+            "Identify the operation and enough of the description to find it among their own transactions. "
+            f"For matchDate, resolve to YYYY-MM-DD based on today's date {local_date} (Asia/Ho_Chi_Minh) if a "
+            "relative date (hôm nay, yesterday, etc.) or specific date was mentioned; empty string if the "
+            "owner did not say a date. Message: " + text,
             "match_transaction", _CHANGE_MATCH_FIELDS,
         )
         operation = match.get("operation")

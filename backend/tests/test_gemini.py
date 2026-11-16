@@ -213,6 +213,19 @@ def test_image_is_passed_as_inline_sdk_part(monkeypatch: pytest.MonkeyPatch) -> 
     assert parts[1].inline_data.data == b"\x89PNG\r\n\x1a\n"
 
 
+def test_parallel_parse_transactions_calls_are_merged(monkeypatch: pytest.MonkeyPatch) -> None:
+    response = SimpleNamespace(function_calls=[
+        SimpleNamespace(name="parse_transactions", args={"items": [{"amount": "96600"}]}),
+        SimpleNamespace(name="parse_transactions", args={"items": [{"amount": "55000"}]}),
+    ])
+    models = FakeModels(response)
+    fake_sdk(monkeypatch, models, [])
+    result = GeminiClient("dummy-secret").call_function(
+        "two items", "parse_transactions", SCHEMA,
+    )
+    assert result == {"items": [{"amount": "96600"}, {"amount": "55000"}]}
+
+
 def test_rejects_unsupported_image_before_network(monkeypatch: pytest.MonkeyPatch) -> None:
     models = FakeModels(function_response({"kind": "greeting"}))
     fake_sdk(monkeypatch, models, [])
