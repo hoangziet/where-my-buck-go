@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 230" role="img" aria-labelledby="title">
+  <title id="title">Review a draft before saving</title>
+  <rect width="360" height="230" rx="22" fill="#f5f8f3"/>
+  <rect x="57" y="26" width="246" height="178" rx="17" fill="#fff" stroke="#e3e9e1"/>
+  <circle cx="88" cy="58" r="13" fill="#e4f1e6"/><path d="M83 58h10m-5-5v10" stroke="#176b49" stroke-width="2.4" stroke-linecap="round"/>
+  <rect x="111" y="51" width="91" height="9" rx="4.5" fill="#bdc9bf"/><rect x="111" y="66" width="61" height="6" rx="3" fill="#e0e6e0"/>
+  <rect x="77" y="91" width="206" height="1" fill="#edf0eb"/>
+  <text x="79" y="118" fill="#758279" font-size="12" font-family="Arial">Amount</text><text x="278" y="118" text-anchor="end" fill="#17251e" font-size="14" font-weight="700" font-family="Arial">45,000 ₫</text>
+  <text x="79" y="144" fill="#758279" font-size="12" font-family="Arial">Category</text><text x="278" y="144" text-anchor="end" fill="#17251e" font-size="13" font-family="Arial">Food &amp; Drink</text>
+  <rect x="78" y="165" width="104" height="23" rx="8" fill="#176b49"/><text x="130" y="180" text-anchor="middle" fill="#fff" font-size="10" font-weight="700" font-family="Arial">Confirm expense</text>
+  <rect x="194" y="167" width="83" height="19" rx="9.5" fill="#e8f3e9"/><text x="235" y="180" text-anchor="middle" fill="#176b49" font-size="9" font-weight="700" font-family="Arial">Draft · Review</text>
+</svg>
