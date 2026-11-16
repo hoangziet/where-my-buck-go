@@ -30,6 +30,7 @@ class DebugTrace:
         if len(normalized) > _MAX_SQL_LENGTH:
             normalized = normalized[:_MAX_SQL_LENGTH] + " …"
         params_str: str | None = None
+        inlined: str | None = None
         if parameters:
             try:
                 def default_serializer(o: object) -> str:
@@ -39,15 +40,40 @@ class DebugTrace:
                 params_str = json.dumps(parameters, default=default_serializer, ensure_ascii=False)
             except Exception:
                 params_str = str(parameters)
-            if len(params_str) > 1000:
-                params_str = params_str[:1000] + " …"
+            if len(params_str) > 2000:
+                params_str = params_str[:2000] + " …"
+
+            if isinstance(parameters, dict):
+                inlined_raw = statement
+                for k, v in parameters.items():
+                    if isinstance(v, (int, float)):
+                        rep = str(v)
+                    elif v is None:
+                        rep = "NULL"
+                    elif isinstance(v, (bytes, bytearray)):
+                        rep = f"<bytes {len(v)}b>"
+                    else:
+                        rep = f"'{v}'"
+                    inlined_raw = inlined_raw.replace(f"%({k})s", rep)
+                inlined = re.sub(r"\s+", " ", inlined_raw).strip()
+                if len(inlined) > _MAX_SQL_LENGTH:
+                    inlined = inlined[:_MAX_SQL_LENGTH] + " …"
+
+        if isinstance(parameters, (dict, list)) and len(parameters) > 0:
+            detail = f"{len(parameters)} parameters bound"
+        elif params_str:
+            detail = "Parameters bound"
+        else:
+            detail = "No parameters"
 
         entry: TraceEntry = {
             "kind": "sql",
             "title": "PostgreSQL",
-            "detail": f"Parameters: {params_str}" if params_str else "No parameters",
+            "detail": detail,
             "sql": normalized,
         }
+        if inlined and inlined != normalized:
+            entry["inlinedSql"] = inlined
         if params_str:
             entry["parameters"] = params_str
         self.entries.append(entry)

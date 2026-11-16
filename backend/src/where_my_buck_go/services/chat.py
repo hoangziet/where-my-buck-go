@@ -278,10 +278,12 @@ class ChatService:
         answer = self.model.call_function(
             "Answer the owner's finance question in natural Vietnamese using ONLY these owner-filtered totals, "
             "category expense breakdowns, and transaction details; do not invent transactions or claim to make "
-            "changes. If no data matches their question, say so politely. Context: " + context,
+            "changes. If no data matches their question, say so politely. "
+            "When there are relevant transactions or spending details, ALWAYS include a clean Markdown table "
+            "(e.g. columns: Ngày | Giờ | Mô tả | Danh mục | Số tiền) to present them clearly. Context: " + context,
             "answer_finance", _ANSWER_FIELDS,
         ).get("answer")
-        if not isinstance(answer, str) or not 1 <= len(answer) <= 1000:
+        if not isinstance(answer, str) or not 1 <= len(answer) <= 2000:
             raise InvalidProposal("Gemini returned an invalid read-only answer")
         record_step("Compose response", "Returned an answer using only account-scoped totals and transactions.")
         return LedgerResult({"kind": "qa", "message": answer, "start": start.isoformat(),
