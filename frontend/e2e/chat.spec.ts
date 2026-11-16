@@ -168,3 +168,100 @@ test("pasted image stays in composer until sent with its caption", async ({ page
   expect(imageRequestBody).toContain("receipt.png");
   expect(imageRequestKey).toBeTruthy();
 });
+
+test("chat message timeout displays error with safe retry guidance and resends with same idempotency key", async ({ page }) => {
+  const requestKeys: string[] = [];
+
+  await openChat(page);
+  await page.route("**/api/chat/messages", async (route) => {
+    requestKeys.push(route.request().headers()["idempotency-key"]);
+    if (requestKeys.length === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Gemini is unreachable after retrying temporary failures" }),
+      });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        kind: "intake",
+        message: "Draft ready for review.",
+        proposals: [proposal],
+        errors: [],
+      }),
+    });
+  });
+
+  const messageBox = page.getByRole("textbox", { name: "Message" });
+  await messageBox.fill("Mua banh mi 25000");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  await expect(page.getByText("Gemini is unreachable after retrying temporary failures")).toBeVisible();
+  await expect(page.getByText("Your message is back in the composer; resend to retry safely.")).toBeVisible();
+  await expect(messageBox).toHaveValue("Mua banh mi 25000");
+
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Draft preview")).toBeVisible();
+
+  expect(requestKeys).toHaveLength(2);
+  expect(requestKeys[0]).toBeTruthy();
+  expect(requestKeys[1]).toBe(requestKeys[0]);
+  await expect(page.getByText("Draft preview")).toHaveCount(1);
+});
+
+test("image intake timeout displays error with safe retry guidance and resends with same idempotency key", async ({ page }) => {
+  const requestKeys: string[] = [];
+
+  await openChat(page);
+  await page.route("**/api/chat/image-intake", async (route) => {
+    requestKeys.push(route.request().headers()["idempotency-key"]);
+    if (requestKeys.length === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Gemini is unreachable after retrying temporary failures" }),
+      });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        kind: "image_intake",
+        message: "Receipt preview ready.",
+        proposal,
+      }),
+    });
+  });
+
+  const messageBox = page.getByRole("textbox", { name: "Message" });
+  await messageBox.evaluate((element) => {
+    const transfer = new DataTransfer();
+    const image = Uint8Array.from(atob(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QioAAAAASUVORK5CYII=",
+    ), (character) => character.charCodeAt(0));
+    transfer.items.add(new File([image], "receipt.png", { type: "image/png" }));
+    element.dispatchEvent(new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: transfer,
+    }));
+  });
+
+  await expect(page.getByRole("img", { name: "Attached receipt" })).toBeVisible();
+  await messageBox.fill("Receipt caption");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  await expect(page.getByText("Gemini is unreachable after retrying temporary failures")).toBeVisible();
+  await expect(page.getByText("The image is back in the composer; resend to retry safely.")).toBeVisible();
+  await expect(page.locator("form").getByRole("img", { name: "Attached receipt" })).toBeVisible();
+  await expect(messageBox).toHaveValue("Receipt caption");
+
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Receipt preview ready.")).toBeVisible();
+
+  expect(requestKeys).toHaveLength(2);
+  expect(requestKeys[0]).toBeTruthy();
+  expect(requestKeys[1]).toBe(requestKeys[0]);
+});

@@ -567,6 +567,38 @@ def test_image_intake_creates_draft_with_image_evidence(
     assert upload(image).status_code == 400
 
 
+def test_image_intake_failed_provider_can_retry_same_key_without_draft(
+    ledger_client: tuple[FlaskClient, str, FlaskClient, str], tmp_path: Path,
+) -> None:
+    client, csrf, _, _ = ledger_client
+    model = chat_model(client)
+    model.responses = {"preview_payment_image": GeminiError("Gemini is unreachable after retrying temporary failures")}
+    image = b"\x89PNG\r\n\x1a\n" + b"test-retry-image"
+    key = str(uuid4())
+
+    def upload(idempotency_key: str) -> object:
+        return client.post(
+            "/api/chat/image-intake",
+            data={"image": (BytesIO(image), "receipt.png"), "caption": "Hóa đơn ăn sáng"},
+            headers={"X-CSRF-Token": csrf, "Idempotency-Key": idempotency_key},
+        )
+
+    failed = upload(key)
+    assert getattr(failed, "status_code", None) == 503
+    assert client.get("/api/proposals").json == {"items": []}
+    assert list(tmp_path.iterdir()) == []
+
+    model.responses["preview_payment_image"] = {
+        "amount": "25000", "currency": "VND", "occurred_date": "2026-11-16",
+        "occurred_time": "08:00", "description": "Hóa đơn ăn sáng", "status": "success", "direction": "expense",
+        "category": "food_drink",
+    }
+    retried = upload(key)
+    assert getattr(retried, "status_code", None) == 201
+    assert len(client.get("/api/proposals").json["items"]) == 1
+    assert len(list(tmp_path.iterdir())) == 1
+
+
 def test_chat_history_is_persisted_and_owner_scoped(
     ledger_client: tuple[FlaskClient, str, FlaskClient, str],
 ) -> None:
