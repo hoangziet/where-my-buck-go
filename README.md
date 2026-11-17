@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="docs/assets/hero.svg" alt="A calm, clear view of personal finances" width="900" />
 
   # Where My Buck Go
 
@@ -7,11 +6,7 @@
 
   Say what you spent, or snap a receipt. The assistant prepares a draft; nothing reaches your ledger until you confirm it.
 
-  [Live app](https://d1498jatb9ljtb.cloudfront.net) · [▶ 15-second demo](demo/output/demo-15s.mp4) · [Deployment runbook](deploy/aws/README.md)
-
-  <br />
-
-  <img src="docs/assets/demo-15s/demo.gif" alt="15-second product demo: log a lunch in chat, review the draft, confirm it, and watch the monthly dashboard update" width="800" />
+  [Live app](https://d1498jatb9ljtb.cloudfront.net) · [Deployment runbook](deploy/aws/README.md)
 </div>
 
 ---
@@ -33,13 +28,9 @@
 
 ## Product highlights
 
-<table>
-  <tr>
-    <td width="33%" align="center"><img src="docs/assets/review-before-save.svg" alt="A draft is reviewed before saving" width="240" /><br /><strong>Review before saving</strong><br />Entries stay drafts until you explicitly confirm them.</td>
-    <td width="33%" align="center"><img src="docs/assets/receipt-evidence.svg" alt="A receipt stays attached as evidence" width="240" /><br /><strong>Keep the source</strong><br />A receipt stays attached to its draft and transaction as evidence.</td>
-    <td width="33%" align="center"><img src="docs/assets/financial-overview.svg" alt="A simple monthly spending overview" width="240" /><br /><strong>Understand the month</strong><br />Spending, income, categories, and history at a glance.</td>
-  </tr>
-</table>
+- **Review before saving:** entries stay drafts until you explicitly confirm them.
+- **Keep the source:** a receipt stays attached to its draft and transaction as evidence.
+- **Understand the month:** spending, income, categories, and history at a glance.
 
 ### Core capabilities
 
@@ -107,7 +98,7 @@ PostgreSQL integration tests require a disposable `TEST_DATABASE_URL`. Browser t
 
 ## Demo video
 
-The [15-second demo](demo/output/demo-15s.mp4) is authored as code with [HyperFrames](https://github.com/heygen-com/hyperframes) in [`demo/`](demo/). It uses synthetic data only; interface elements are rebuilt from the frontend source, not recorded from a real account.
+The 15-second demo shown on the landing page is authored as code with [HyperFrames](https://github.com/heygen-com/hyperframes) in [`demo/`](demo/). It uses synthetic data only; interface elements are rebuilt from the frontend source, not recorded from a real account.
 
 To edit or re-render, install Node.js 22+ and FFmpeg, then run:
 
@@ -115,7 +106,7 @@ To edit or re-render, install Node.js 22+ and FFmpeg, then run:
 cd demo
 npm run dev                             # live preview in the browser
 npm run check                           # lint, layout, motion, and contrast checks
-npx hyperframes render -o output/demo-15s.mp4
+npx hyperframes render -o ../frontend/public/demo.mp4   # served by the landing page
 ```
 
 ## License
