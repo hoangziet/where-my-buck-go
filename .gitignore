@@ -12,7 +12,6 @@ frontend/.next/
 frontend/.next-*/
 frontend/test-results/
 frontend/playwright-report/
-demo-video/.hyperframes/
 .env
 client_secret*.json
 .local-evidence/

@@ -107,12 +107,7 @@ PostgreSQL integration tests require a disposable `TEST_DATABASE_URL`. Browser t
 
 ## Demo video
 
-The demos are authored as code with [HyperFrames](https://github.com/heygen-com/hyperframes) and use synthetic data only; interface elements are rebuilt from the frontend source, not recorded from a real account.
-
-| Project | Length | Output |
-| --- | --- | --- |
-| [`demo-video-15s/`](demo-video-15s/) | 15 s | [`output/demo-15s.mp4`](demo-video-15s/output/demo-15s.mp4) |
-| [`demo-video/`](demo-video/) | 32 s | [`output/main.mp4`](demo-video/output/main.mp4) |
+The [15-second demo](demo-video-15s/output/demo-15s.mp4) is authored as code with [HyperFrames](https://github.com/heygen-com/hyperframes) in [`demo-video-15s/`](demo-video-15s/). It uses synthetic data only; interface elements are rebuilt from the frontend source, not recorded from a real account.
 
 To edit or re-render, install Node.js 22+ and FFmpeg, then run:
 
