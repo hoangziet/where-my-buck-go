@@ -77,6 +77,14 @@ class PostgresAuthStore(AuthStore):
             )).mappings().first()
         return SessionRecord(row["user_id"], row["username"], row["csrf_digest"], row["expires_at"]) if row else None
 
+    def extend_session(self, token_digest: bytes, expiry: datetime, now: datetime) -> bool:
+        with self.engine.begin() as conn:
+            result = conn.execute(update(sessions).where(
+                sessions.c.token_digest == token_digest, sessions.c.revoked_at.is_(None),
+                sessions.c.expires_at > now,
+            ).values(expires_at=expiry))
+        return result.rowcount == 1
+
     def revoke_session(self, token_digest: bytes, now: datetime) -> None:
         with self.engine.begin() as conn:
             conn.execute(update(sessions).where(sessions.c.token_digest == token_digest,

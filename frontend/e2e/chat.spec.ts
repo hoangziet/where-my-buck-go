@@ -70,7 +70,8 @@ test("text intake shows a draft and discard never confirms it", async ({ page })
   await page.getByRole("textbox", { name: "Message" }).fill("I spent 1,000 VND on coffee this morning");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("Draft preview")).toBeVisible();
-  await expect(page.getByText(/−1[.,]000 ₫/)).toBeVisible();
+  await expect(page.getByLabel("Amount")).toHaveValue("1.000");
+  await expect(page.getByLabel("Type")).toHaveValue("expense");
   await page.getByRole("button", { name: "Discard" }).click();
   await expect(page.getByText("Discarded")).toBeVisible();
 
@@ -299,4 +300,85 @@ test("chat sidebar lists previous chats and toggles collapse", async ({ page }) 
   // Test New chat button in sidebar
   await sidebar.getByRole("button", { name: "New chat" }).click();
   await expect(page).toHaveURL(/\/chat$/);
+});
+
+test("draft fields are editable inline and saved before confirming", async ({ page }) => {
+  const draft = { ...proposal, amount: "42000", description: "ăn hủ tiếu", occurredDate: null, canConfirm: false };
+  let amendBody: Record<string, unknown> | null = null;
+  let confirmedVersion: unknown = null;
+
+  await openChat(page);
+  await page.route("**/api/chat/messages", (route) => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({ kind: "intake", message: "Draft ready.", proposals: [draft], errors: [] }),
+  }));
+  await page.route("**/api/proposals/proposal-test-1", async (route) => {
+    amendBody = route.request().postDataJSON();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...draft, version: 2, amount: "45000", category: "shopping", occurredDate: "2026-11-12",
+        occurredTime: "19:00", period: "tối", timeSource: "explicit", canConfirm: true,
+      }),
+    });
+  });
+  await page.route("**/api/proposals/proposal-test-1/confirm", async (route) => {
+    confirmedVersion = route.request().postDataJSON().expectedVersion;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        proposal: { ...draft, version: 3, state: "confirmed" },
+        transaction: { id: "t1", version: 1, deleted: false, amount: "45000", currency: "VND", direction: "expense",
+          description: "ăn hủ tiếu", category: "shopping", occurredDate: "2026-11-12", occurredTime: "19:00",
+          period: "tối", timeSource: "explicit" },
+      }),
+    });
+  });
+
+  await page.getByRole("textbox", { name: "Message" }).fill("ăn hủ tiếu 42k");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Pick a date (or tell me in chat) to confirm.")).toBeVisible();
+  await page.getByLabel("Amount").fill("45.000");
+  await page.getByLabel("Category").selectOption("shopping");
+  await page.getByLabel("Date", { exact: true }).fill("2026-11-12");
+  await page.getByLabel("Time").fill("19:00");
+  await page.getByRole("button", { name: "Save & confirm" }).click();
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+
+  expect(amendBody).toMatchObject({
+    expectedVersion: 1, amount: "45000", category: "shopping", occurredDate: "2026-11-12",
+    occurredTime: "19:00", period: null, description: "ăn hủ tiếu", direction: "expense",
+  });
+  expect(confirmedVersion).toBe(2);
+});
+
+test("a follow-up message sends pending drafts and replaces the revised card", async ({ page }) => {
+  const draft = { ...proposal, description: "ăn hủ tiếu", occurredDate: null, canConfirm: false };
+  const bodies: Record<string, unknown>[] = [];
+
+  await openChat(page);
+  await page.route("**/api/chat/messages", async (route) => {
+    const body = route.request().postDataJSON();
+    bodies.push(body);
+    const response = bodies.length === 1
+      ? { kind: "intake", message: "Đã tạo bản nháp.", proposals: [draft], errors: [] }
+      : { kind: "intake", message: "Đã cập nhật bản nháp.", revisedProposalIds: [draft.id], errors: [],
+          proposals: [{ ...draft, version: 2, occurredDate: "2026-11-12", occurredTime: "19:00", canConfirm: true }] };
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(response) });
+  });
+
+  const composer = page.getByRole("textbox", { name: "Message" });
+  await composer.fill("ăn hủ tiếu 42k");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Đã tạo bản nháp.")).toBeVisible();
+  await composer.fill("tối qua 7h");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Đã cập nhật bản nháp.")).toBeVisible();
+
+  expect(bodies[0].pendingProposalIds).toBeUndefined();
+  expect(bodies[1].pendingProposalIds).toEqual([draft.id]);
+  const history = bodies[1].history as { role: string; text: string }[];
+  expect(history[1].text).toContain(`[Draft ${draft.id}] ăn hủ tiếu`);
+  await expect(page.getByText("Draft preview")).toHaveCount(1);
+  await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2026-11-12");
 });

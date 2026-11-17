@@ -175,13 +175,16 @@ def ledger_blueprint(
         if chat is None:
             return jsonify(error="Gemini chat is not configured"), 503
         body = payload()
-        if not set(body) <= {"text", "history", "expectedVersion", "chatId", "clientTimezone"}:
+        if not set(body) <= {"text", "history", "expectedVersion", "chatId", "clientTimezone", "pendingProposalIds"}:
             raise InvalidProposal("Unexpected chat fields")
         version(body, create=True)
         text = body.get("text")
         chat_history = body.get("history", [])
         chat_id = body.get("chatId")
         client_timezone = body.get("clientTimezone")
+        pending_ids = body.get("pendingProposalIds", [])
+        if not isinstance(pending_ids, list) or not all(isinstance(item, str) for item in pending_ids):
+            raise InvalidProposal("pendingProposalIds must be a list of draft IDs")
         if not isinstance(text, str) or not isinstance(chat_history, list):
             raise InvalidProposal("Chat text and history are required")
         if chat_id is not None and not isinstance(chat_id, str):
@@ -198,7 +201,7 @@ def ledger_blueprint(
             try:
                 response = chat.respond(
                     owner(), key(), text, datetime.now(timezone.utc), bounded, chat_id,
-                    client_timezone=client_timezone,
+                    client_timezone=client_timezone, pending_proposal_ids=pending_ids,
                 )
             except GeminiError as error:
                 status = 429 if "HTTP 429" in str(error) else 503

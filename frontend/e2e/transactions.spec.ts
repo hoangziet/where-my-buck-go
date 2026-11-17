@@ -243,3 +243,34 @@ test("delete and undo each require their own explicit confirmation", async ({ pa
   expect(confirmRequests).toBe(2);
   expect(confirmOperation).toEqual(["delete", "undo"]);
 });
+
+test("columns sort like a spreadsheet and range filters narrow the list", async ({ page }) => {
+  const rows = [
+    original,
+    { ...original, id: "t-2", description: "Salary", direction: "income", category: "income", amount: "9000000",
+      occurredDate: "2026-11-10" },
+    { ...original, id: "t-3", description: "Bánh mì", amount: "25000", occurredDate: "2026-11-14" },
+  ];
+  await openTransactions(page, rows);
+  const descriptions = () => page.locator("table tbody tr td:nth-child(2)").allTextContents();
+
+  expect(await descriptions()).toEqual(["Bánh mì", "Coffee", "Salary"]);
+  await page.getByRole("button", { name: "Amount" }).click();
+  expect(await descriptions()).toEqual(["Salary", "Coffee", "Bánh mì"]);
+  await expect(page.getByRole("columnheader", { name: "Amount" })).toHaveAttribute("aria-sort", "descending");
+  await page.getByRole("button", { name: "Amount" }).click();
+  expect(await descriptions()).toEqual(["Bánh mì", "Coffee", "Salary"]);
+  await page.getByRole("button", { name: "Description" }).click();
+  expect(await descriptions()).toEqual(["Bánh mì", "Coffee", "Salary"]);
+  await page.getByRole("button", { name: "Description" }).click();
+  expect(await descriptions()).toEqual(["Salary", "Coffee", "Bánh mì"]);
+
+  await page.getByLabel("From date").first().fill("2026-11-11");
+  expect(await descriptions()).toEqual(["Coffee", "Bánh mì"]);
+  await page.getByLabel("Minimum amount").first().fill("20000");
+  expect(await descriptions()).toEqual(["Bánh mì"]);
+  await expect(page.getByText("1 transactions", { exact: true })).toBeVisible();
+  await expect(page.getByText(/filtered from 3 · net −25\.000 ₫/)).toBeVisible();
+  await page.getByRole("button", { name: "Clear filters" }).first().click();
+  expect(await descriptions()).toHaveLength(3);
+});

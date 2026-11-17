@@ -183,6 +183,29 @@ export function proposeChange(
   });
 }
 
+export type DraftFields = {
+  amount: string;
+  currency: "VND";
+  direction: "income" | "expense";
+  description: string;
+  category: Category;
+  occurredDate: string | null;
+  occurredTime: string | null;
+  period: string | null;
+};
+
+export function amendProposal(
+  id: string,
+  expectedVersion: number,
+  fields: DraftFields,
+  evidenceText: string,
+): Promise<ProposalDto> {
+  return request(`/api/proposals/${id}`, {
+    method: "PATCH",
+    body: { expectedVersion, evidenceText, ...fields },
+  });
+}
+
 export function confirmProposal(
   id: string,
   expectedVersion: number,
@@ -232,7 +255,13 @@ export interface TraceEntry {
 
 export type ChatResponse = { chatId?: string; debugTrace?: TraceEntry[] } & (
   | { kind: "qa"; message: string; start: string; end: string; totals: { income: string; expense: string } }
-  | { kind: "intake"; proposals: ProposalDto[]; errors: { index: number; error: string }[]; message: string }
+  | {
+      kind: "intake";
+      proposals: ProposalDto[];
+      errors: { index: number; error: string }[];
+      message: string;
+      revisedProposalIds?: string[];
+    }
   | { kind: "change"; proposal: ProposalDto; message: string }
   | {
       kind: "needs_selection";
@@ -247,6 +276,7 @@ export function sendChatMessage(
   history: ChatHistoryItem[],
   chatId?: string,
   idempotencyKey?: string,
+  pendingProposalIds: string[] = [],
 ): Promise<ChatResponse> {
   const clientTimezone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined;
   return request("/api/chat/messages", {
@@ -258,6 +288,7 @@ export function sendChatMessage(
       expectedVersion: 0,
       ...(chatId ? { chatId } : {}),
       ...(clientTimezone ? { clientTimezone } : {}),
+      ...(pendingProposalIds.length ? { pendingProposalIds } : {}),
     },
   });
 }

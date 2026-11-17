@@ -463,6 +463,48 @@ def test_chat_change_multiple_matches_lists_candidates(
     assert len(response.json["candidates"]) == 2
 
 
+def test_chat_follow_up_revises_pending_draft(ledger_client: tuple[FlaskClient, str, FlaskClient, str]) -> None:
+    client, csrf, other, other_csrf = ledger_client
+    model = chat_model(client)
+    model.responses = {"route_message": {"specialist": "intake", "date": ""},
+                       "parse_transactions": {"items": [{**chat_item("42000", "ăn hủ tiếu", day=""),
+                                                         "occurredTime": ""}]}}
+    draft = chat_post(client, csrf, "ăn hủ tiếu 42k").json["proposals"][0]
+    assert draft["occurredDate"] is None and not draft["canConfirm"]
+
+    model.responses = {
+        "route_message": {"specialist": "revise", "date": ""},
+        "revise_draft": {**chat_item("42000", "ăn hủ tiếu", day="2026-11-08"), "proposalId": draft["id"],
+                         "period": "tối", "occurredTime": "07:00"},
+    }
+    history = [{"role": "user", "text": "ăn hủ tiếu 42k"}, {"role": "assistant", "text": "Đã tạo bản nháp"}]
+    body = {"text": "tối qua 7h", "expectedVersion": 0, "history": history, "pendingProposalIds": [draft["id"]]}
+    response = client.post("/api/chat/messages", json=body, headers=headers(csrf))
+    assert response.status_code == 200 and response.json["revisedProposalIds"] == [draft["id"]]
+    revised = response.json["proposals"][0]
+    assert revised["id"] == draft["id"] and revised["version"] == 2
+    assert (revised["occurredDate"], revised["occurredTime"], revised["period"]) == ("2026-11-08", "19:00", "tối")
+    assert revised["canConfirm"]
+    route_prompt = next(prompt for name, prompt in model.calls if name == "route_message" and "tối qua" in prompt)
+    assert draft["id"] in route_prompt and "ăn hủ tiếu 42k" in route_prompt
+    stale = client.post(f'/api/proposals/{draft["id"]}/confirm', json={"expectedVersion": 1}, headers=headers(csrf))
+    assert stale.status_code == 409
+    confirmed = client.post(f'/api/proposals/{draft["id"]}/confirm', json={"expectedVersion": 2},
+                            headers=headers(csrf))
+    assert confirmed.status_code == 200 and confirmed.json["transaction"]["occurredTime"] == "19:00"
+
+    # Another owner's draft ID is never visible, so "revise" falls back to a new intake.
+    other_model = chat_model(other)
+    other_model.responses = {"route_message": {"specialist": "revise", "date": ""},
+                             "parse_transactions": {"items": [chat_item("10000", "Trà đá")]}}
+    foreign = other.post("/api/chat/messages", headers=headers(other_csrf), json={
+        "text": "trà đá 10k", "expectedVersion": 0, "pendingProposalIds": [draft["id"]]})
+    assert foreign.status_code == 200 and foreign.json["proposals"][0]["description"] == "Trà đá"
+    assert draft["id"] not in next(prompt for name, prompt in reversed(other_model.calls) if name == "route_message")
+    for invalid in ({**body, "pendingProposalIds": "id"}, {**body, "pendingProposalIds": [str(uuid4())] * 6}):
+        assert client.post("/api/chat/messages", json=invalid, headers=headers(csrf)).status_code == 400
+
+
 def test_chat_change_edit_keeps_unmentioned_fields(
     ledger_client: tuple[FlaskClient, str, FlaskClient, str],
 ) -> None:

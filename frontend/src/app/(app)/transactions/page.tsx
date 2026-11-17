@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Download, Plus, Trash2, Pencil, Eye, ChevronDown } from "lucide-react";
-import { appLocalISODate, formatVND } from "@/lib/format";
+import { Search, Download, Plus, Trash2, Pencil, Eye, ChevronDown, ArrowUp, ArrowDown, ArrowUpDown, SlidersHorizontal, X } from "lucide-react";
+import { appLocalISODate, formatNumber, formatVND } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { Category, TransactionDto } from "@/lib/api";
 import { ApiError, CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
@@ -11,6 +11,54 @@ import { ApiError, CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
 type TypeFilter = "all" | "expense" | "income";
 type CategoryFilter = "all" | Category;
 type ChangeAction = "edit" | "delete" | "undo";
+type SortKey = "date" | "description" | "category" | "type" | "amount";
+type Sort = { key: SortKey; dir: "asc" | "desc" };
+type RangeFilter = { dateFrom: string; dateTo: string; minAmount: string; maxAmount: string };
+
+const DEFAULT_SORT: Sort = { key: "date", dir: "desc" };
+const EMPTY_RANGE: RangeFilter = { dateFrom: "", dateTo: "", minAmount: "", maxAmount: "" };
+const SORT_LABELS: Record<SortKey, string> = {
+  date: "Date", description: "Description", category: "Category", type: "Type", amount: "Amount",
+};
+
+function signedAmount(t: TransactionDto): number {
+  return t.direction === "income" ? Number(t.amount) : -Number(t.amount);
+}
+
+function compareBy(key: SortKey, a: TransactionDto, b: TransactionDto): number {
+  switch (key) {
+    case "date":
+      return `${a.occurredDate} ${a.occurredTime}`.localeCompare(`${b.occurredDate} ${b.occurredTime}`);
+    case "description":
+      return a.description.localeCompare(b.description, "vi", { sensitivity: "base" });
+    case "category":
+      return CATEGORY_LABELS[a.category].localeCompare(CATEGORY_LABELS[b.category]);
+    case "type":
+      return a.direction.localeCompare(b.direction);
+    case "amount":
+      return signedAmount(a) - signedAmount(b);
+  }
+}
+
+function sortTransactions(items: TransactionDto[], sort: Sort): TransactionDto[] {
+  const direction = sort.dir === "asc" ? 1 : -1;
+  // Ties fall back to newest first so equal values keep a stable, predictable order.
+  return [...items].sort((a, b) => direction * compareBy(sort.key, a, b) || -compareBy("date", a, b));
+}
+
+function nextSort(current: Sort, key: SortKey): Sort {
+  if (current.key !== key) return { key, dir: key === "date" || key === "amount" ? "desc" : "asc" };
+  return { key, dir: current.dir === "asc" ? "desc" : "asc" };
+}
+
+function matchesRange(t: TransactionDto, range: RangeFilter): boolean {
+  if (range.dateFrom && t.occurredDate < range.dateFrom) return false;
+  if (range.dateTo && t.occurredDate > range.dateTo) return false;
+  const amount = Number(t.amount);
+  if (range.minAmount && amount < Number(range.minAmount)) return false;
+  if (range.maxAmount && amount > Number(range.maxAmount)) return false;
+  return true;
+}
 
 type PendingChange = {
   proposal: api.ProposalDto;
@@ -73,6 +121,9 @@ export default function TransactionsPage() {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [range, setRange] = useState<RangeFilter>(EMPTY_RANGE);
+  const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [lastDeleted, setLastDeleted] = useState<{ tx: TransactionDto; deletedVersion: number } | null>(null);
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TransactionDto | null>(null);
@@ -92,14 +143,27 @@ export default function TransactionsPage() {
   }, []);
 
   const visible = useMemo(() => {
-    return items.filter((t) => {
+    const filtered = items.filter((t) => {
       if (typeFilter === "expense" && t.direction !== "expense") return false;
       if (typeFilter === "income" && t.direction !== "income") return false;
       if (categoryFilter !== "all" && t.category !== categoryFilter) return false;
       if (query && !t.description.toLowerCase().includes(query.toLowerCase())) return false;
-      return true;
+      return matchesRange(t, range);
     });
-  }, [items, typeFilter, categoryFilter, query]);
+    return sortTransactions(filtered, sort);
+  }, [items, typeFilter, categoryFilter, query, range, sort]);
+
+  const filtersActive = query !== "" || typeFilter !== "all" || categoryFilter !== "all"
+    || Object.values(range).some(Boolean);
+
+  function clearFilters() {
+    setQuery("");
+    setTypeFilter("all");
+    setCategoryFilter("all");
+    setRange(EMPTY_RANGE);
+  }
+
+  const visibleTotal = visible.reduce((sum, t) => sum + signedAmount(t), 0);
 
   async function handleStaleVersion(err: unknown): Promise<boolean> {
     if (!(err instanceof ApiError) || err.status !== 409) return false;
@@ -230,6 +294,7 @@ export default function TransactionsPage() {
     const now = new Date();
     const today = appLocalISODate(now);
     const yesterday = appLocalISODate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+    if (sort.key !== "date") return [[`Sorted by ${SORT_LABELS[sort.key].toLowerCase()}`, visible] as [string, TransactionDto[]]];
     const map = new Map<string, TransactionDto[]>();
     for (const t of visible) {
       const g = dayGroup(t, today, yesterday);
@@ -237,7 +302,7 @@ export default function TransactionsPage() {
       map.get(g)!.push(t);
     }
     return Array.from(map.entries());
-  }, [visible]);
+  }, [visible, sort.key]);
 
   return (
     <main className="flex-1 flex flex-col gap-5 px-4 pb-12 pt-6 lg:px-10 lg:pt-8 lg:pb-12 relative">
@@ -245,7 +310,10 @@ export default function TransactionsPage() {
       <div className="hidden lg:flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="m-0 font-display font-semibold text-[32px] tracking-tight">Transactions</h1>
-          <span className="text-sm text-muted">{loading ? "Loading…" : `${visible.length} transactions`}</span>
+          <span className="text-sm text-muted">
+            {loading ? "Loading…" : <span>{visible.length} transactions</span>}
+            {!loading && filtersActive && <span> · filtered from {items.length} · net {formatVND(visibleTotal)}</span>}
+          </span>
         </div>
         <div className="flex flex-wrap gap-2.5">
           <button
@@ -307,7 +375,44 @@ export default function TransactionsPage() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            aria-expanded={mobileFiltersOpen}
+            onClick={() => setMobileFiltersOpen((open) => !open)}
+            className="shrink-0 flex items-center gap-1.5 text-[13px] bg-surface border border-border-input rounded-full px-3.5 min-h-9 cursor-pointer"
+          >
+            <SlidersHorizontal size={14} />
+            Sort &amp; filter
+          </button>
         </div>
+        {mobileFiltersOpen && (
+          <div className="flex flex-col gap-3 bg-surface border border-border rounded-2xl p-3.5">
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              Sort by
+              <select
+                value={`${sort.key}:${sort.dir}`}
+                onChange={(e) => {
+                  const [key, dir] = e.target.value.split(":") as [SortKey, Sort["dir"]];
+                  setSort({ key, dir });
+                }}
+                className="text-sm text-ink bg-surface border border-border-input rounded-[10px] px-3 min-h-10"
+              >
+                {(Object.keys(SORT_LABELS) as SortKey[]).flatMap((key) => (["desc", "asc"] as const).map((dir) => (
+                  <option key={`${key}:${dir}`} value={`${key}:${dir}`}>
+                    {SORT_LABELS[key]} · {sortDirectionLabel(key, dir)}
+                  </option>
+                )))}
+              </select>
+            </label>
+            <RangeFilters range={range} onChange={setRange} />
+            {filtersActive && <ClearFiltersButton onClick={clearFilters} />}
+          </div>
+        )}
+        {!loading && filtersActive && (
+          <p className="m-0 text-xs text-muted">
+            {visible.length} of {items.length} transactions · net {formatVND(visibleTotal)}
+          </p>
+        )}
       </div>
 
       {/* Desktop filters */}
@@ -347,6 +452,10 @@ export default function TransactionsPage() {
           <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
       </div>
+      <div className="hidden lg:flex flex-wrap gap-2.5 items-end -mt-2">
+        <RangeFilters range={range} onChange={setRange} />
+        {filtersActive && <ClearFiltersButton onClick={clearFilters} />}
+      </div>
 
       {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
 
@@ -358,7 +467,9 @@ export default function TransactionsPage() {
       )}
 
       {!loading && visible.length === 0 && (
-        <p className="m-0 text-sm text-muted">No transactions yet. Add one from the AI Chat.</p>
+        <p className="m-0 text-sm text-muted">
+          {items.length > 0 ? "No transactions match these filters." : "No transactions yet. Add one from the AI Chat."}
+        </p>
       )}
 
       {/* Desktop table */}
@@ -366,11 +477,11 @@ export default function TransactionsPage() {
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
             <tr className="text-muted text-xs uppercase tracking-wide">
-              <th className="text-left py-3.5 px-5 font-semibold border-b border-border-nav">Date</th>
-              <th className="text-left py-3.5 px-3 font-semibold border-b border-border-nav">Description</th>
-              <th className="text-left py-3.5 px-3 font-semibold border-b border-border-nav">Category</th>
-              <th className="text-left py-3.5 px-3 font-semibold border-b border-border-nav">Type</th>
-              <th className="text-right py-3.5 px-3 font-semibold border-b border-border-nav">Amount</th>
+              <SortableHeader column="date" sort={sort} onSort={setSort} className="px-5" />
+              <SortableHeader column="description" sort={sort} onSort={setSort} />
+              <SortableHeader column="category" sort={sort} onSort={setSort} />
+              <SortableHeader column="type" sort={sort} onSort={setSort} />
+              <SortableHeader column="amount" sort={sort} onSort={setSort} align="right" />
               <th className="py-3.5 px-5 border-b border-border-nav">
                 <span className="sr-only">Actions</span>
               </th>
@@ -878,6 +989,93 @@ function EditModal({
         </div>
       </form>
     </div>
+  );
+}
+
+function sortDirectionLabel(key: SortKey, dir: Sort["dir"]): string {
+  if (key === "date") return dir === "desc" ? "newest first" : "oldest first";
+  if (key === "amount") return dir === "desc" ? "highest first" : "lowest first";
+  return dir === "asc" ? "A → Z" : "Z → A";
+}
+
+function SortableHeader({
+  column,
+  sort,
+  onSort,
+  align = "left",
+  className = "px-3",
+}: {
+  column: SortKey;
+  sort: Sort;
+  onSort: (next: Sort) => void;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  const active = sort.key === column;
+  const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th
+      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+      className={`py-2 font-semibold border-b border-border-nav ${className} ${align === "right" ? "text-right" : "text-left"}`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(nextSort(sort, column))}
+        title={`Sort by ${SORT_LABELS[column].toLowerCase()}`}
+        className={`inline-flex items-center gap-1.5 uppercase tracking-wide text-xs font-semibold bg-transparent border-0 rounded-md px-1.5 -mx-1.5 min-h-9 cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC] hover:text-ink ${
+          active ? "text-ink" : "text-muted"
+        } ${align === "right" ? "flex-row-reverse" : ""}`}
+      >
+        {SORT_LABELS[column]}
+        <Icon size={13} className={active ? "text-accent" : "opacity-50"} />
+      </button>
+    </th>
+  );
+}
+
+const RANGE_INPUT = "text-sm text-ink bg-surface border border-border-input rounded-[10px] px-3 min-h-10 outline-none transition-colors duration-150 focus:border-accent";
+
+function RangeFilters({ range, onChange }: { range: RangeFilter; onChange: (next: RangeFilter) => void }) {
+  const set = (patch: Partial<RangeFilter>) => onChange({ ...range, ...patch });
+  const digits = (value: string) => value.replace(/[^0-9]/g, "").slice(0, 15);
+  return (
+    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2.5 sm:items-end">
+      <fieldset className="m-0 p-0 border-0 flex flex-col gap-1 min-w-0">
+        <legend className="text-xs text-muted mb-1">Date</legend>
+        <div className="flex items-center gap-1.5">
+          <input type="date" aria-label="From date" value={range.dateFrom} max={range.dateTo || undefined}
+            onChange={(e) => set({ dateFrom: e.target.value })} className={`${RANGE_INPUT} flex-1 min-w-0 sm:flex-none`} />
+          <span className="text-muted text-sm">–</span>
+          <input type="date" aria-label="To date" value={range.dateTo} min={range.dateFrom || undefined}
+            onChange={(e) => set({ dateTo: e.target.value })} className={`${RANGE_INPUT} flex-1 min-w-0 sm:flex-none`} />
+        </div>
+      </fieldset>
+      <fieldset className="m-0 p-0 border-0 flex flex-col gap-1 min-w-0">
+        <legend className="text-xs text-muted mb-1">Amount (₫)</legend>
+        <div className="flex items-center gap-1.5">
+          <input inputMode="numeric" aria-label="Minimum amount" placeholder="Min"
+            value={range.minAmount ? formatNumber(Number(range.minAmount)) : ""}
+            onChange={(e) => set({ minAmount: digits(e.target.value) })} className={`${RANGE_INPUT} flex-1 min-w-0 sm:flex-none sm:w-32 font-mono`} />
+          <span className="text-muted text-sm">–</span>
+          <input inputMode="numeric" aria-label="Maximum amount" placeholder="Max"
+            value={range.maxAmount ? formatNumber(Number(range.maxAmount)) : ""}
+            onChange={(e) => set({ maxAmount: digits(e.target.value) })} className={`${RANGE_INPUT} flex-1 min-w-0 sm:flex-none sm:w-32 font-mono`} />
+        </div>
+      </fieldset>
+    </div>
+  );
+}
+
+function ClearFiltersButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1.5 self-start lg:self-end text-sm font-medium bg-transparent text-ink-3 border-0 rounded-[10px] px-3 min-h-10 cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC] hover:text-ink"
+    >
+      <X size={15} />
+      Clear filters
+    </button>
   );
 }
 

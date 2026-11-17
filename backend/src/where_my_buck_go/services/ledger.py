@@ -201,22 +201,28 @@ class LedgerService:
 
     def amend(self, owner: str, key: str, identifier: str, body: dict[str, object], now: datetime) -> LedgerResult:
         def amend_in(tx: LedgerSession, written: list[str]) -> LedgerResult:
-            proposal = tx.proposal(owner, identifier, lock=True)
-            if proposal is None:
-                raise NotFound
-            if proposal.state != "draft" or proposal.version != body["expectedVersion"]:
-                raise VersionConflict("Draft changed since preview")
-            if proposal.operation not in ("create", "edit"):
-                raise InvalidProposal("Only create and edit drafts can change their fields")
-            updated = ProposalRecord(proposal.id, owner, proposal.version + 1, proposal.operation,
-                                     proposal.target_id, proposal.base_version, self._fields(body, now),
-                                     False, "draft", None)
-            evidence = self.evidence.put_text(self._source(body))
-            written.append(evidence.storage_key)
-            tx.revise_proposal(updated, proposal.version)
-            tx.insert_evidence(owner, proposal.id, evidence)
-            return LedgerResult({**proposal_view(updated), "evidenceIds": [evidence.id]}, 200)
+            return self.amend_in_transaction(tx, owner, identifier, body, now, written)
         return self.execute_with_evidence(owner, key, f"amend:{identifier}", body, amend_in)
+
+    def amend_in_transaction(
+        self, tx: LedgerSession, owner: str, identifier: str, body: dict[str, object], now: datetime,
+        written: list[str],
+    ) -> LedgerResult:
+        proposal = tx.proposal(owner, identifier, lock=True)
+        if proposal is None:
+            raise NotFound
+        if proposal.state != "draft" or proposal.version != body["expectedVersion"]:
+            raise VersionConflict("Draft changed since preview")
+        if proposal.operation not in ("create", "edit"):
+            raise InvalidProposal("Only create and edit drafts can change their fields")
+        updated = ProposalRecord(proposal.id, owner, proposal.version + 1, proposal.operation,
+                                 proposal.target_id, proposal.base_version, self._fields(body, now),
+                                 False, "draft", None)
+        evidence = self.evidence.put_text(self._source(body))
+        written.append(evidence.storage_key)
+        tx.revise_proposal(updated, proposal.version)
+        tx.insert_evidence(owner, proposal.id, evidence)
+        return LedgerResult({**proposal_view(updated), "evidenceIds": [evidence.id]}, 200)
 
     def confirm(self, owner: str, key: str, identifier: str, expected: int, now: datetime) -> LedgerResult:
         body: dict[str, object] = {"expectedVersion": expected}

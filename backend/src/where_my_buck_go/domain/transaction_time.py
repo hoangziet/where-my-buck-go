@@ -131,6 +131,14 @@ def is_period_compatible(clock: time, period: Period) -> bool:
     return False
 
 
+def _read_twelve_hour_clock(clock: time, period: Period) -> time:
+    """People say 'tối 7h' or '3h chiều' on a 12-hour clock; read it as 19:00 / 15:00."""
+    if is_period_compatible(clock, period) or not 1 <= clock.hour < 12:
+        return clock
+    afternoon = clock.replace(hour=clock.hour + 12)
+    return afternoon if is_period_compatible(afternoon, period) else clock
+
+
 def resolve_transaction_time(
     date_text: str | None, period: str | None, time_text: str | None, received_at: datetime,
     zone: ZoneInfo = LOCAL_ZONE,
@@ -142,6 +150,8 @@ def resolve_transaction_time(
     stated_period = parse_period(period)
     if time_text is not None and time_text != "":
         clock = parse_clock(time_text)
+        if stated_period is not None:
+            clock = _read_twelve_hour_clock(clock, stated_period)
         inferred = period_for(clock)
         if stated_period is not None and not is_period_compatible(clock, stated_period):
             raise InvalidTransactionTime("Explicit clock conflicts with the stated period; ask the owner")

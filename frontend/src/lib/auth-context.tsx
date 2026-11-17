@@ -12,6 +12,8 @@ interface AuthState {
   invalidate: () => void;
 }
 
+const SESSION_CHECK_RETRY_DELAYS_MS = [500, 1500, 3000];
+
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -20,11 +22,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [sessionExpired, setSessionExpired] = useState(false);
 
   useEffect(() => {
-    api
-      .me()
-      .then((res) => setUsername(res.username))
-      .catch(() => setUsername(null))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    // Only a 401 means "signed out". A home-screen app resuming from the background often has no
+    // network for a moment, so transient failures are retried instead of bouncing to /login.
+    async function checkSession() {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const res = await api.me();
+          if (!cancelled) setUsername(res.username);
+          return;
+        } catch (err) {
+          const unauthorized = err instanceof api.ApiError && err.status === 401;
+          if (unauthorized || attempt >= SESSION_CHECK_RETRY_DELAYS_MS.length) {
+            if (!cancelled) setUsername(null);
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, SESSION_CHECK_RETRY_DELAYS_MS[attempt]));
+          if (cancelled) return;
+        }
+      }
+    }
+    checkSession().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

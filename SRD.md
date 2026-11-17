@@ -39,7 +39,7 @@ Backend responsibilities are separated into `api/` (HTTP, auth, validation), `do
 ## Authentication and Security
 
 - Authentication uses an owner-created username and password; there is no public sign-up or SSO.
-- Passwords use Argon2id. Server-side sessions expire after 12 hours and can be revoked. Production cookies use the `__Host-` prefix, `HttpOnly`, and `SameSite=Strict`.
+- Passwords use Argon2id. Server-side sessions slide: they expire after 30 days without use, are renewed at most once a day while in use, and can be revoked. Production session cookies use the `__Host-` prefix, `Secure`, and `HttpOnly`; `SameSite` is `Strict` for password login and `Lax` for Google sign-in and renewals, with CSRF tokens required on every mutating request.
 - Mutating authenticated requests require a CSRF token. Login attempts are rate-limited using an HMAC digest of the client address.
 - Treat chat, captions, receipt contents, and model responses as untrusted input. Validate all data before applying business rules. Never log secrets or raw financial content.
 

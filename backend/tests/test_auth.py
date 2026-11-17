@@ -50,6 +50,13 @@ class MemoryAuthStore:
         session = self.sessions.get(token_digest)
         return session if session and session.expires_at > now else None
 
+    def extend_session(self, token_digest: bytes, expiry: datetime, now: datetime) -> bool:
+        session = self.find_session(token_digest, now)
+        if session is None:
+            return False
+        self.sessions[token_digest] = SessionRecord(session.user_id, session.username, session.csrf_digest, expiry)
+        return True
+
     def revoke_session(self, token_digest: bytes, now: datetime) -> None:
         self.sessions.pop(token_digest, None)
 
@@ -112,12 +119,64 @@ def test_session_expiry_and_logout(setup: tuple[AuthService, MemoryAuthStore]) -
     from where_my_buck_go.services.auth import digest_secret
 
     session = service.session(result.token)
-    assert session and session.expires_at > datetime.now(timezone.utc) + timedelta(hours=11)
+    assert session and session.expires_at > datetime.now(timezone.utc) + timedelta(days=29)
     store.sessions[digest_secret(result.token)] = SessionRecord(session.user_id, session.username,
                                                                 session.csrf_digest, datetime.now(timezone.utc))
     assert service.session(result.token) is None
     service.logout(result.token)
     assert service.session(result.token) is None
+
+
+def test_session_slides_forward_when_used(setup: tuple[AuthService, MemoryAuthStore]) -> None:
+    from where_my_buck_go.services.auth import digest_secret
+
+    service, store = setup
+    result = service.login("owner", "very-long-password-123", "127.0.0.1")
+    assert result is not None
+    fresh = service.session(result.token)
+    assert fresh is not None
+    assert service.renew_if_due(result.token, fresh) is None
+
+    now = datetime.now(timezone.utc)
+    store.sessions[digest_secret(result.token)] = SessionRecord(fresh.user_id, fresh.username,
+                                                                fresh.csrf_digest, now + timedelta(days=3))
+    aging = service.session(result.token)
+    assert aging is not None
+    renewed = service.renew_if_due(result.token, aging)
+    assert renewed is not None and renewed.expires_at > now + timedelta(days=29)
+    assert service.session(result.token) == renewed
+
+    store.sessions[digest_secret(result.token)] = SessionRecord(fresh.user_id, fresh.username,
+                                                                fresh.csrf_digest, now - timedelta(seconds=1))
+    assert service.session(result.token) is None
+
+
+def test_http_renews_session_cookies_but_not_on_logout(setup: tuple[AuthService, MemoryAuthStore]) -> None:
+    service, store = setup
+    client = create_app(service, production=True).test_client()
+    response = client.post("/api/auth/login", json={"username": "owner", "password": "very-long-password-123"})
+    assert "Max-Age=2592000" in response.headers.getlist("Set-Cookie")[0]
+    csrf = response.json["csrfToken"]
+    assert not client.get("/api/auth/me").headers.getlist("Set-Cookie")
+
+    key = next(iter(store.sessions))
+    session = store.sessions[key]
+    store.sessions[key] = SessionRecord(session.user_id, session.username, session.csrf_digest,
+                                        datetime.now(timezone.utc) + timedelta(days=2))
+    renewed = client.get("/api/auth/me")
+    cookies = renewed.headers.getlist("Set-Cookie")
+    assert renewed.status_code == 200 and len(cookies) == 2
+    assert all("Max-Age=2592000" in cookie and "Secure" in cookie for cookie in cookies)
+    assert "__Host-wmbg_session=" in cookies[0] and "HttpOnly" in cookies[0]
+    assert f"__Host-wmbg_csrf={csrf}" in cookies[1]
+    assert store.sessions[key].expires_at > datetime.now(timezone.utc) + timedelta(days=29)
+
+    store.sessions[key] = SessionRecord(session.user_id, session.username, session.csrf_digest,
+                                        datetime.now(timezone.utc) + timedelta(days=2))
+    logout = client.post("/api/auth/logout", headers={"X-CSRF-Token": csrf})
+    assert logout.status_code == 200
+    assert all("Max-Age=0" in cookie for cookie in logout.headers.getlist("Set-Cookie"))
+    assert key not in store.sessions
 
 
 def test_http_cookie_csrf_permissions_and_revocation(setup: tuple[AuthService, MemoryAuthStore]) -> None:

@@ -69,6 +69,16 @@ def test_relative_dates_use_original_anchor_not_worker_time() -> None:
     assert resolve_transaction_time("yesterday", "afternoon", "15:00", ANCHOR).period == "chiều"
 
 
+@pytest.mark.parametrize("period,clock,expected", [
+    ("tối", "07:00", "19:00"), ("chiều", "03:30", "15:30"), ("trưa", "01:00", "13:00"),
+    ("tối", "19:00", "19:00"), ("sáng", "07:00", "07:00"), ("tối", "01:00", "01:00"),
+])
+def test_twelve_hour_clock_is_read_with_its_period(period: str, clock: str, expected: str) -> None:
+    result = resolve_transaction_time("2026-11-08", period, clock, ANCHOR)
+    assert result.occurred_time.strftime("%H:%M") == expected
+    assert result.source == "explicit"
+
+
 @pytest.mark.parametrize("date_text,period,clock", [
     ("2026-02-30", None, None), ("09/13/2026", None, None), ("tối qua", None, None),
     ("2026-11-09", "sáng", "20:00"), ("2026-11-09", "đêm", None),
