@@ -36,8 +36,18 @@ def test_postgres_owner_sessions_and_rate_limit() -> None:
             attempt = conn.execute(text("SELECT address_digest FROM login_attempts LIMIT 1")).scalar_one()
             assert attempt != b"192.0.2.9"
             assert conn.execute(text("SELECT count(*) FROM users")).scalar_one() == 1
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE sessions SET expires_at = now() + interval '2 days'"))
+        aging = service.session(result.token)
+        assert aging is not None
+        renewed = service.renew_if_due(result.token, aging)
+        assert renewed is not None and renewed.expires_at > aging.expires_at + timedelta(days=27)
+        stored = service.session(result.token)
+        assert stored is not None and stored.expires_at == renewed.expires_at
         service.logout(result.token)
         assert service.session(result.token) is None
+        assert not PostgresAuthStore(engine).extend_session(digest_secret(result.token), renewed.expires_at,
+                                                             renewed.expires_at - timedelta(days=30))
         replacement = service.login("owner", "long-owner-password-123", "192.0.2.10")
         assert replacement is not None
         assert service.reset_password("owner", "replacement-long-password-123")

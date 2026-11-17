@@ -110,3 +110,23 @@ test("login page shows Google sign-in option and displays errors from query para
   await expect(googleBtn).toHaveAttribute("href", "/api/auth/google");
   await expect(page.locator("p[role='alert']")).toHaveText("Google sign-in was cancelled or failed");
 });
+
+test("a transient network failure on launch retries instead of signing the owner out", async ({ page }) => {
+  let sessionChecks = 0;
+  await page.route("**/api/auth/me", (route) => {
+    sessionChecks += 1;
+    if (sessionChecks === 1) return route.abort("internetdisconnected");
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ username: "owner" }) });
+  });
+  await page.route("**/api/reports/summary?months=**", (route) => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({ start: "2026-11-01", end: "2026-11-30", totals: { income: "0", expense: "0" }, months: [], categories: {} }),
+  }));
+  await page.route("**/api/transactions", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [] }) }));
+  await page.route("**/api/chat/pins", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [] }) }));
+
+  await page.goto("/dashboard");
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  expect(sessionChecks).toBe(2);
+});

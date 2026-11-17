@@ -10,7 +10,7 @@ from typing import Protocol
 from argon2 import PasswordHasher, Type
 from argon2.exceptions import VerifyMismatchError
 
-from where_my_buck_go.domain.auth import session_expiry, utc_now
+from where_my_buck_go.domain.auth import session_expiry, session_needs_renewal, utc_now
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,7 @@ class AuthStore(Protocol):
     def reserve_login(self, digest: bytes, now: datetime) -> bool: ...
     def create_session(self, user_id: str, token_digest: bytes, csrf_digest: bytes, expiry: datetime) -> None: ...
     def find_session(self, token_digest: bytes, now: datetime) -> SessionRecord | None: ...
+    def extend_session(self, token_digest: bytes, expiry: datetime, now: datetime) -> bool: ...
     def revoke_session(self, token_digest: bytes, now: datetime) -> None: ...
 
 
@@ -122,6 +123,16 @@ class AuthService:
         if not token or len(token) > 128:
             return None
         return self.store.find_session(digest_secret(token), utc_now())
+
+    def renew_if_due(self, token: str, session: SessionRecord) -> SessionRecord | None:
+        """Slide an active session's expiry forward; returns the renewed record, or None if not due."""
+        now = utc_now()
+        if not session_needs_renewal(session.expires_at, now):
+            return None
+        expiry = session_expiry(now)
+        if not self.store.extend_session(digest_secret(token), expiry, now):
+            return None
+        return SessionRecord(session.user_id, session.username, session.csrf_digest, expiry)
 
     def check_csrf(self, session: SessionRecord, csrf: str) -> bool:
         return bool(csrf) and hmac.compare_digest(session.csrf_digest, digest_secret(csrf))

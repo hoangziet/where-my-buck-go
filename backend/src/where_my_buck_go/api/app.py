@@ -23,10 +23,13 @@ from where_my_buck_go.adapters.ledger_repo import PostgresLedgerStore
 from where_my_buck_go.adapters.local_evidence import LocalEvidenceStore
 from where_my_buck_go.adapters.object_evidence import object_evidence_from_environment
 from where_my_buck_go.api.ledger import ledger_blueprint
+from where_my_buck_go.domain.auth import SESSION_LIFETIME
 from where_my_buck_go.services.auth import AuthService, LoginLimitedError, SessionRecord
 from where_my_buck_go.services.chat import ChatService
 from where_my_buck_go.services.history import HistoryService
 from where_my_buck_go.services.ledger import LedgerService
+
+SESSION_ENDING_PATHS = frozenset({"/api/auth/logout", "/api/auth/change-password"})
 
 jsonify = cast(Callable[..., Response], flask_jsonify)
 redirect = cast(Callable[..., Response], flask_redirect)
@@ -46,6 +49,7 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
     cookie_name = "__Host-wmbg_session" if is_production else "wmbg_session"
     csrf_cookie_name = "__Host-wmbg_csrf" if is_production else "wmbg_csrf"
     oauth_state_cookie_name = "__Host-wmbg_oauth_state" if is_production else "wmbg_oauth_state"
+    session_max_age = int(SESSION_LIFETIME.total_seconds())
     if google_auth is None:
         google_auth = google_auth_from_environment()
     if service is None:
@@ -95,7 +99,25 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
         if request.method in ("POST", "PUT", "PATCH", "DELETE"):
             if not service.check_csrf(session, request.headers.get("X-CSRF-Token", "")):
                 return jsonify(error="Invalid CSRF token"), 403
+        if request.path not in SESSION_ENDING_PATHS:
+            renewed = service.renew_if_due(token, session)
+            if renewed is not None:
+                g.session = renewed
+                g.session_renewed = True
         return None
+
+    @app.after_request
+    def refresh_session_cookies(response: Response) -> Response:
+        if not g.get("session_renewed") or response.status_code == 401:
+            return response
+        token = request.cookies.get(cookie_name, "")
+        response.set_cookie(cookie_name, token, max_age=session_max_age, httponly=True,
+                            secure=is_production, samesite="Lax", path="/")
+        csrf = request.cookies.get(csrf_cookie_name)
+        if csrf:
+            response.set_cookie(csrf_cookie_name, csrf, max_age=session_max_age, httponly=False,
+                                secure=is_production, samesite="Lax", path="/")
+        return response
 
     @app.route("/api/auth/login", methods=["POST"])
     def login() -> Response | tuple[Response, int]:
@@ -111,9 +133,9 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
         if result is None:
             return jsonify(error="Invalid credentials"), 401
         response = jsonify(username=result.username, csrfToken=result.csrf)
-        response.set_cookie(cookie_name, result.token, max_age=12 * 60 * 60, httponly=True,
+        response.set_cookie(cookie_name, result.token, max_age=session_max_age, httponly=True,
                             secure=is_production, samesite="Strict", path="/")
-        response.set_cookie(csrf_cookie_name, result.csrf, max_age=12 * 60 * 60, httponly=False,
+        response.set_cookie(csrf_cookie_name, result.csrf, max_age=session_max_age, httponly=False,
                             secure=is_production, samesite="Strict", path="/")
         response.headers["Cache-Control"] = "no-store"
         return response
@@ -159,9 +181,9 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
             return redirect(f"/login?error={quote(f'Google authentication failed: {exc}')}")
 
         response = redirect("/dashboard")
-        response.set_cookie(cookie_name, result.token, max_age=12 * 60 * 60, httponly=True,
+        response.set_cookie(cookie_name, result.token, max_age=session_max_age, httponly=True,
                             secure=is_production, samesite="Lax", path="/")
-        response.set_cookie(csrf_cookie_name, result.csrf, max_age=12 * 60 * 60, httponly=False,
+        response.set_cookie(csrf_cookie_name, result.csrf, max_age=session_max_age, httponly=False,
                             secure=is_production, samesite="Lax", path="/")
         response.set_cookie(oauth_state_cookie_name, "", max_age=0, httponly=True,
                             secure=is_production, samesite="Lax", path="/")
@@ -186,9 +208,9 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
             return jsonify(error=f"Google authentication failed: {exc}"), 400
 
         response = jsonify(username=result.username, csrfToken=result.csrf)
-        response.set_cookie(cookie_name, result.token, max_age=12 * 60 * 60, httponly=True,
+        response.set_cookie(cookie_name, result.token, max_age=session_max_age, httponly=True,
                             secure=is_production, samesite="Lax", path="/")
-        response.set_cookie(csrf_cookie_name, result.csrf, max_age=12 * 60 * 60, httponly=False,
+        response.set_cookie(csrf_cookie_name, result.csrf, max_age=session_max_age, httponly=False,
                             secure=is_production, samesite="Lax", path="/")
         response.headers["Cache-Control"] = "no-store"
         return response
