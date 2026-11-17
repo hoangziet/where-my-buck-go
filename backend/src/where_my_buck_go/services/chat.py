@@ -73,6 +73,13 @@ _CHANGE_MATCH_FIELDS: dict[str, object] = {
 }
 
 
+def _blank_optional_fields_to_none(payload: dict[str, object]) -> None:
+    """The model returns "" for a date, time or period the owner never stated; the ledger expects None."""
+    for optional in ("occurredDate", "occurredTime", "period"):
+        if payload[optional] == "":
+            payload[optional] = None
+
+
 class ChatModel(Protocol):
     def call_function(self, prompt: str, name: str, parameters: dict[str, object],
                       *, image: bytes | None = None, mime_type: str | None = None) -> dict[str, object]: ...
@@ -203,9 +210,7 @@ class ChatService:
                 if not isinstance(item, dict) or set(item) != _ITEM_KEYS:
                     raise InvalidProposal("Missing or unexpected transaction fields")
                 payload: dict[str, object] = {**item, "evidenceText": text, "expectedVersion": 0}
-                for optional in ("occurredDate", "occurredTime", "period"):
-                    if payload[optional] == "":
-                        payload[optional] = None
+                _blank_optional_fields_to_none(payload)
                 preview = self.ledger.create_in_transaction(tx, owner, payload, now, written)
                 proposals.append(preview.body)
             except (InvalidProposal, InvalidMoney, InvalidTransactionTime) as error:
@@ -262,9 +267,7 @@ class ChatService:
         if set(fields) != _ITEM_KEYS:
             raise InvalidProposal("Missing or unexpected draft fields")
         payload: dict[str, object] = {**fields, "evidenceText": text, "expectedVersion": target.version}
-        for optional in ("occurredDate", "occurredTime", "period"):
-            if payload[optional] == "":
-                payload[optional] = None
+        _blank_optional_fields_to_none(payload)
         try:
             updated = self.ledger.amend_in_transaction(tx, owner, target.id, payload, now, written)
         except (InvalidProposal, InvalidMoney, InvalidTransactionTime) as error:
@@ -338,9 +341,7 @@ class ChatService:
             if not isinstance(edited, dict) or set(edited) != _ITEM_KEYS:
                 raise InvalidProposal("Missing or unexpected edit fields")
             body.update(edited)
-            for optional in ("occurredDate", "occurredTime", "period"):
-                if body[optional] == "":
-                    body[optional] = None
+            _blank_optional_fields_to_none(body)
         proposal = self.ledger.change_in_transaction(tx, owner, body, now, written)
         message = {"edit": "Đã tạo bản nháp sửa; cần xác nhận riêng.",
                    "delete": "Đã tạo bản nháp xoá; cần xác nhận riêng.",

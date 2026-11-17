@@ -5,7 +5,7 @@ import os
 import secrets
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 from urllib.parse import quote
 
 from flask import Flask, Response, g, request, send_from_directory
@@ -31,6 +31,14 @@ from where_my_buck_go.services.ledger import LedgerService
 
 SESSION_ENDING_PATHS = frozenset({"/api/auth/logout", "/api/auth/change-password"})
 
+def verified_email(user_info: dict[str, Any]) -> str | None:
+    """Google identities are trusted only when Google itself verified the email address."""
+    email = user_info.get("email")
+    if isinstance(email, str) and email and user_info.get("email_verified") in (True, "true", 1):
+        return email
+    return None
+
+
 jsonify = cast(Callable[..., Response], flask_jsonify)
 redirect = cast(Callable[..., Response], flask_redirect)
 
@@ -50,6 +58,21 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
     csrf_cookie_name = "__Host-wmbg_csrf" if is_production else "wmbg_csrf"
     oauth_state_cookie_name = "__Host-wmbg_oauth_state" if is_production else "wmbg_oauth_state"
     session_max_age = int(SESSION_LIFETIME.total_seconds())
+
+    def set_session_cookies(response: Response, token: str, csrf: str | None, *,
+                            samesite: Literal["Strict", "Lax"], max_age: int = session_max_age) -> None:
+        response.set_cookie(cookie_name, token, max_age=max_age, httponly=True,
+                            secure=is_production, samesite=samesite, path="/")
+        if csrf is not None:
+            response.set_cookie(csrf_cookie_name, csrf, max_age=max_age, httponly=False,
+                                secure=is_production, samesite=samesite, path="/")
+
+    def clear_auth_cookies(response: Response) -> None:
+        set_session_cookies(response, "", "", samesite="Strict", max_age=0)
+
+    def set_oauth_state_cookie(response: Response, state: str, max_age: int) -> None:
+        response.set_cookie(oauth_state_cookie_name, state, max_age=max_age, httponly=True,
+                            secure=is_production, samesite="Lax", path="/")
     if google_auth is None:
         google_auth = google_auth_from_environment()
     if service is None:
@@ -110,13 +133,8 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
     def refresh_session_cookies(response: Response) -> Response:
         if not g.get("session_renewed") or response.status_code == 401:
             return response
-        token = request.cookies.get(cookie_name, "")
-        response.set_cookie(cookie_name, token, max_age=session_max_age, httponly=True,
-                            secure=is_production, samesite="Lax", path="/")
-        csrf = request.cookies.get(csrf_cookie_name)
-        if csrf:
-            response.set_cookie(csrf_cookie_name, csrf, max_age=session_max_age, httponly=False,
-                                secure=is_production, samesite="Lax", path="/")
+        set_session_cookies(response, request.cookies.get(cookie_name, ""),
+                            request.cookies.get(csrf_cookie_name) or None, samesite="Lax")
         return response
 
     @app.route("/api/auth/login", methods=["POST"])
@@ -133,10 +151,7 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
         if result is None:
             return jsonify(error="Invalid credentials"), 401
         response = jsonify(username=result.username, csrfToken=result.csrf)
-        response.set_cookie(cookie_name, result.token, max_age=session_max_age, httponly=True,
-                            secure=is_production, samesite="Strict", path="/")
-        response.set_cookie(csrf_cookie_name, result.csrf, max_age=session_max_age, httponly=False,
-                            secure=is_production, samesite="Strict", path="/")
+        set_session_cookies(response, result.token, result.csrf, samesite="Strict")
         response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -154,8 +169,7 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
         redirect_uri = determine_google_redirect_uri()
         auth_url = google_auth.get_authorization_url(redirect_uri, state)
         response = redirect(auth_url)
-        response.set_cookie(oauth_state_cookie_name, state, max_age=300, httponly=True,
-                            secure=is_production, samesite="Lax", path="/")
+        set_oauth_state_cookie(response, state, max_age=300)
         return response
 
     @app.route("/api/auth/google/callback", methods=["GET"])
@@ -171,22 +185,16 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
 
         redirect_uri = determine_google_redirect_uri()
         try:
-            user_info = google_auth.exchange_code(code, redirect_uri)
-            email = user_info.get("email")
-            email_verified = user_info.get("email_verified") in (True, "true", 1)
-            if not email or not email_verified:
+            email = verified_email(google_auth.exchange_code(code, redirect_uri))
+            if email is None:
                 return redirect(f"/login?error={quote('Google account email is not verified')}")
             result = service.login_or_register_oauth(email)
         except Exception as exc:
             return redirect(f"/login?error={quote(f'Google authentication failed: {exc}')}")
 
         response = redirect("/dashboard")
-        response.set_cookie(cookie_name, result.token, max_age=session_max_age, httponly=True,
-                            secure=is_production, samesite="Lax", path="/")
-        response.set_cookie(csrf_cookie_name, result.csrf, max_age=session_max_age, httponly=False,
-                            secure=is_production, samesite="Lax", path="/")
-        response.set_cookie(oauth_state_cookie_name, "", max_age=0, httponly=True,
-                            secure=is_production, samesite="Lax", path="/")
+        set_session_cookies(response, result.token, result.csrf, samesite="Lax")
+        set_oauth_state_cookie(response, "", max_age=0)
         return response
 
     @app.route("/api/auth/google", methods=["POST"])
@@ -198,20 +206,15 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
         if not isinstance(credential, str) or not credential:
             return jsonify(error="credential is required"), 400
         try:
-            user_info = google_auth.verify_id_token(credential)
-            email = user_info.get("email")
-            email_verified = user_info.get("email_verified") in (True, "true", 1)
-            if not email or not email_verified:
+            email = verified_email(google_auth.verify_id_token(credential))
+            if email is None:
                 return jsonify(error="Google account email is not verified"), 400
             result = service.login_or_register_oauth(email)
         except Exception as exc:
             return jsonify(error=f"Google authentication failed: {exc}"), 400
 
         response = jsonify(username=result.username, csrfToken=result.csrf)
-        response.set_cookie(cookie_name, result.token, max_age=session_max_age, httponly=True,
-                            secure=is_production, samesite="Lax", path="/")
-        response.set_cookie(csrf_cookie_name, result.csrf, max_age=session_max_age, httponly=False,
-                            secure=is_production, samesite="Lax", path="/")
+        set_session_cookies(response, result.token, result.csrf, samesite="Lax")
         response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -219,12 +222,6 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
     def me() -> Response:
         session: SessionRecord = g.session
         return jsonify(username=session.username)
-
-    def clear_auth_cookies(response: Response) -> None:
-        response.set_cookie(cookie_name, "", max_age=0, httponly=True,
-                            secure=is_production, samesite="Strict", path="/")
-        response.set_cookie(csrf_cookie_name, "", max_age=0, httponly=False,
-                            secure=is_production, samesite="Strict", path="/")
 
     @app.route("/api/auth/change-password", methods=["POST"])
     def change_password() -> Response | tuple[Response, int]:
