@@ -13,7 +13,9 @@ function isDateOrTimeHeader(header: string): boolean {
   return h.includes("ngày") || h.includes("date") || h.includes("giờ") || h.includes("time");
 }
 
-function formatTableCell(header: string, cell: string) {
+function formatTableCell(header: string, raw: string) {
+  // Category pills and amounts carry their own emphasis, so bold markers are dropped there.
+  const cell = raw.replace(/\*\*/g, "");
   if (isCategoryHeader(header)) {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#EFECE6] text-ink-2">
@@ -31,7 +33,16 @@ function formatTableCell(header: string, cell: string) {
       : "text-ink font-medium";
     return <span className={`font-mono ${colorClass}`}>{cell}</span>;
   }
-  return cell;
+  return renderInline(raw);
+}
+
+/** Render **bold** spans as <strong>; everything else stays plain, escaped text. */
+function renderInline(text: string) {
+  return text.split(/(\*\*[^*\n]+\*\*)/g).map((part, index) =>
+    part.length > 4 && part.startsWith("**") && part.endsWith("**")
+      ? <strong key={index} className="font-semibold text-ink">{part.slice(2, -2)}</strong>
+      : part,
+  );
 }
 
 export function FormattedMessage({ text }: { text: string }) {
@@ -82,7 +93,7 @@ export function FormattedMessage({ text }: { text: string }) {
                           key={hIdx}
                           className={`px-3.5 py-2.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider ${align}`}
                         >
-                          {h}
+                          {renderInline(h)}
                         </th>
                       );
                     })}
@@ -113,7 +124,7 @@ export function FormattedMessage({ text }: { text: string }) {
         if (!paragraph) return null;
         return (
           <p key={idx} className="m-0 leading-relaxed whitespace-pre-wrap">
-            {paragraph}
+            {renderInline(paragraph)}
           </p>
         );
       })}

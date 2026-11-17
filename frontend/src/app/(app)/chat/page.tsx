@@ -9,6 +9,7 @@ import type { ChatHistoryItem, ProposalDto, TraceEntry, TransactionDto } from "@
 import { FormattedMessage } from "@/components/chat/FormattedMessage";
 import { AiMessage, CandidateCard, RefreshRangeDataButton, UserBubble } from "@/components/chat/MessageParts";
 import { ProposalCard } from "@/components/chat/ProposalCard";
+import { StarterQuestions } from "@/components/chat/StarterQuestions";
 import { TracePanel } from "@/components/chat/TracePanel";
 import {
   MAX_PENDING_DRAFTS,
@@ -53,7 +54,11 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [history, setHistory] = useState<ChatHistoryItem[]>([]);
   const [chatId, setChatId] = useState<string | undefined>(urlChatId);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // On phones the sidebar is an overlay; start with it closed so the conversation is visible.
+  // This page renders on the client only (useSearchParams behind Suspense), so window is available.
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches,
+  );
   const [refreshSidebarTrigger, setRefreshSidebarTrigger] = useState(0);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -155,8 +160,8 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
     setPendingImageUrl(null);
   }
 
-  async function handleSend() {
-    const text = input.trim();
+  async function handleSend(suggestion?: string) {
+    const text = (suggestion ?? input).trim();
     if ((!text && !pendingImage) || sending) return;
     if (pendingImage) {
       await sendImage(pendingImage, text);
@@ -380,9 +385,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
           >
             <PanelLeft size={19} />
           </button>
-          <span className="flex-1 font-semibold text-sm lg:text-base truncate">
-            {chatId ? "AI Chat" : "New Chat"}
-          </span>
+          <span className="flex-1" />
           <button
             type="button"
             aria-label="New chat"
@@ -401,6 +404,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
               Log a spend (&ldquo;pho 45k this morning&rdquo;), attach a receipt photo, or ask a question about your money.
             </p>
           )}
+          {messages.length === 0 && !chatId && !sending && <StarterQuestions onAsk={handleSend} />}
 
           {messages.map((m, i) =>
             m.role === "user" ? (

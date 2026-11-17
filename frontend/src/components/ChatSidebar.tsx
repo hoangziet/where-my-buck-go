@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   MessageSquare,
-  PanelLeftClose,
   Plus,
   Settings,
   LogOut,
@@ -14,7 +13,6 @@ import {
   Check,
   X,
 } from "lucide-react";
-import { LogoMark } from "./Logo";
 import { useAuth } from "@/lib/auth-context";
 import * as api from "@/lib/api";
 import type { ChatSummary } from "@/lib/api";
@@ -144,25 +142,6 @@ export function ChatSidebar({
         aria-label="Chat history"
       >
         <div className="w-[260px] flex-1 flex flex-col h-full min-h-0">
-          {/* Header */}
-          <div className="h-14 px-3.5 flex items-center justify-between border-b border-border-row shrink-0">
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-2 no-underline text-ink font-semibold text-sm hover:opacity-85 transition-opacity"
-            >
-              <LogoMark size={22} />
-              <span className="font-display tracking-tight text-xs uppercase font-bold text-ink-2">Where My Buck Go</span>
-            </Link>
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-label="Collapse sidebar"
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-3 hover:text-ink hover:bg-[#F4F2EC] transition-colors border-0 bg-transparent cursor-pointer"
-            >
-              <PanelLeftClose size={18} />
-            </button>
-          </div>
-
           {/* New chat action */}
           <div className="p-3 shrink-0">
             <button
