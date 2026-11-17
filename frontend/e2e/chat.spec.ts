@@ -407,3 +407,17 @@ test("starter questions show only on a new, empty chat and send when picked", as
   expect(sent).toEqual(["Tuần này tôi đã chi bao nhiêu?"]);
   await expect(starters).toHaveCount(0);
 });
+
+test("markdown bold in replies renders as strong text, not asterisks", async ({ page }) => {
+  await openChat(page);
+  await page.route("**/api/chat/messages", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
+    kind: "qa", start: "2026-11-16", end: "2026-11-22", totals: { income: "0", expense: "450000" },
+    message: "Tuần này bạn đã chi **450.000 ₫**.\n\n| Mô tả | Số tiền |\n|---|---|\n| **Phở** | **-45.000 ₫** |",
+  }) }));
+  await page.getByRole("textbox", { name: "Message" }).fill("Tuần này tôi chi bao nhiêu?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator("strong", { hasText: "450.000 ₫" })).toBeVisible();
+  await expect(page.locator("td strong", { hasText: "Phở" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "-45.000 ₫" })).toBeVisible();
+  await expect(page.getByText(/\*\*/)).toHaveCount(0);
+});
