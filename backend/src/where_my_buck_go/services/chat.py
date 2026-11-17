@@ -183,7 +183,7 @@ class ChatService:
             "'today', 'hôm qua', 'hom qua', 'yesterday', 'tối qua', 'last Friday', etc.) and resolve it "
             f"directly into an explicit 'YYYY-MM-DD' date based on today's reference date: {local_date}. "
             "If the message does not state a date or day word, leave 'occurredDate' "
-            f"as an empty string (do not invent a date). Never emit a future date beyond {local_date}. "
+            f"as an empty string; the app then uses today. Never emit a future date beyond {local_date}. "
             "For 'period': Normalize any time-of-day mention across any language (e.g. morning/am/sáng/sang -> "
             "'sáng', noon/lunch/trưa/trua -> 'trưa', afternoon/pm/chiều/chieu -> 'chiều', evening/night/tối/toi "
             "-> 'tối') into exactly one of: 'sáng', 'trưa', 'chiều', 'tối', or empty string if not mentioned. "
@@ -211,6 +211,8 @@ class ChatService:
                     raise InvalidProposal("Missing or unexpected transaction fields")
                 payload: dict[str, object] = {**item, "evidenceText": text, "expectedVersion": 0}
                 _blank_optional_fields_to_none(payload)
+                # An entry that names no day is about today; the draft shows it and stays editable.
+                payload["occurredDate"] = payload["occurredDate"] or local_date
                 preview = self.ledger.create_in_transaction(tx, owner, payload, now, written)
                 proposals.append(preview.body)
             except (InvalidProposal, InvalidMoney, InvalidTransactionTime) as error:
@@ -268,6 +270,7 @@ class ChatService:
             raise InvalidProposal("Missing or unexpected draft fields")
         payload: dict[str, object] = {**fields, "evidenceText": text, "expectedVersion": target.version}
         _blank_optional_fields_to_none(payload)
+        payload["occurredDate"] = payload["occurredDate"] or local_date
         try:
             updated = self.ledger.amend_in_transaction(tx, owner, target.id, payload, now, written)
         except (InvalidProposal, InvalidMoney, InvalidTransactionTime) as error:

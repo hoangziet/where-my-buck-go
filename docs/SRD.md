@@ -30,7 +30,7 @@ Backend responsibilities are separated into `api/` (HTTP, auth, validation), `do
 - Every create, edit, delete, and undo operation starts as a preview. It changes the ledger only after a separate explicit confirmation.
 - Writes use a UUID `Idempotency-Key` and an expected version. Replaying the same key and payload returns the original result; reusing a key with a different payload returns a conflict.
 - V1 stores VND amounts as exact decimal values and uses `Asia/Ho_Chi_Minh` for local dates and times.
-- A transaction needs a date and amount before confirmation. Missing dates are not inferred from upload or processing time. Missing times use a visible, editable default based on the stated period.
+- A transaction needs a date and amount before confirmation. A chat entry that states no date is drafted for today in the owner's timezone, shown on the draft and editable before confirmation; receipt images must show their own payment date. Missing times use a visible, editable default based on the stated period.
 - One text message can produce multiple independent proposals. Each proposal requires its own confirmation.
 - Each image intake request accepts one PNG or JPEG image and creates one proposal for the receipt total, preserving the original image as evidence. Multiple images are not supported in a single request. An optional caption may clarify merchant or category; receipt amount, date, and time take precedence over caption values.
 - Evidence remains associated with its draft and confirmed transaction and can be viewed in the web app.
