@@ -9,7 +9,7 @@ synthetic receipt draft have been verified without leaving records in the active
 export download and contents passed using a browser-only fixture (as the production ledger is empty
 and the export button requires rows). Daily archive checksums and a separate-database restore
 rehearsal passed on the existing RDS instance, with temporary restore resources removed (the AWS
-Free Plan prevented creating a second RDS instance). See `AWS_DEPLOYMENT_PLAN.md` for remaining
+Free Plan prevented creating a second RDS instance). See [`DEPLOYMENT_PLAN.md`](DEPLOYMENT_PLAN.md) for remaining
 acceptance gates. Commands below run from the repository root.
 
 ## Authenticate and provision

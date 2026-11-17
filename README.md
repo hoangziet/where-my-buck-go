@@ -7,7 +7,7 @@
 
   Say what you spent, or snap a receipt. The assistant prepares a draft; nothing reaches your ledger until you confirm it.
 
-  [Live app](https://d1498jatb9ljtb.cloudfront.net) · [▶ 15-second demo](demo-video-15s/output/demo-15s.mp4) · [Deployment runbook](deploy/aws/README.md)
+  [Live app](https://d1498jatb9ljtb.cloudfront.net) · [▶ 15-second demo](demo/output/demo-15s.mp4) · [Deployment runbook](deploy/aws/README.md)
 
   <br />
 
@@ -69,7 +69,7 @@ docker compose -f compose.local.yml exec backend wmbg-bootstrap owner
 
 Open [http://localhost:3100](http://localhost:3100). On later starts, omit the bootstrap command if an owner already exists. Stop the services with `docker compose -f compose.local.yml down`; this preserves local database and evidence volumes. Avoid `-v` unless you intend to delete that data.
 
-For host-based development, Python and frontend commands are documented in [AGENTS.md](AGENTS.md). The current AWS architecture, provisioning and release process are in [AWS_DEPLOYMENT_PLAN.md](AWS_DEPLOYMENT_PLAN.md) and the [AWS operations runbook](deploy/aws/README.md).
+For host-based development, Python and frontend commands are documented in [AGENTS.md](AGENTS.md). The current AWS architecture, provisioning and release process are in [deployment plan](deploy/aws/DEPLOYMENT_PLAN.md) and the [AWS operations runbook](deploy/aws/README.md).
 
 ## Architecture
 
@@ -85,7 +85,7 @@ Next.js web app ── same-origin API proxy ── Flask API ── PostgreSQL
 - **Local evidence:** private filesystem volume. **Production evidence:** private AWS S3 bucket.
 - **Production:** AWS EC2 and CloudFront with managed RDS PostgreSQL and Terraform-managed infrastructure.
 
-More on the product and its safety rules: [SRD](SRD.md). Contributor conventions: [AGENTS.md](AGENTS.md).
+More on the product and its safety rules: [SRD](docs/SRD.md). Contributor conventions: [AGENTS.md](AGENTS.md).
 
 ## Safety model
 
@@ -107,12 +107,12 @@ PostgreSQL integration tests require a disposable `TEST_DATABASE_URL`. Browser t
 
 ## Demo video
 
-The [15-second demo](demo-video-15s/output/demo-15s.mp4) is authored as code with [HyperFrames](https://github.com/heygen-com/hyperframes) in [`demo-video-15s/`](demo-video-15s/). It uses synthetic data only; interface elements are rebuilt from the frontend source, not recorded from a real account.
+The [15-second demo](demo/output/demo-15s.mp4) is authored as code with [HyperFrames](https://github.com/heygen-com/hyperframes) in [`demo/`](demo/). It uses synthetic data only; interface elements are rebuilt from the frontend source, not recorded from a real account.
 
 To edit or re-render, install Node.js 22+ and FFmpeg, then run:
 
 ```sh
-cd demo-video-15s
+cd demo
 npm run dev                             # live preview in the browser
 npm run check                           # lint, layout, motion, and contrast checks
 npx hyperframes render -o output/demo-15s.mp4
