@@ -1,0 +1,38 @@
+[
+  {
+    "text": "Log",
+    "start": 0.05,
+    "end": 0.18,
+    "id": "w0"
+  },
+  {
+    "text": "it.",
+    "start": 0.18,
+    "end": 0.44,
+    "id": "w1"
+  },
+  {
+    "text": "Review",
+    "start": 0.6,
+    "end": 0.94,
+    "id": "w2"
+  },
+  {
+    "text": "it.",
+    "start": 0.94,
+    "end": 1.22,
+    "id": "w3"
+  },
+  {
+    "text": "Confirm",
+    "start": 1.33,
+    "end": 1.72,
+    "id": "w4"
+  },
+  {
+    "text": "it.",
+    "start": 1.72,
+    "end": 2.02,
+    "id": "w5"
+  }
+]

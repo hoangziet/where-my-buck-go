@@ -1,0 +1,38 @@
+[
+  {
+    "text": "and",
+    "start": 0.08,
+    "end": 0.15,
+    "id": "w0"
+  },
+  {
+    "text": "your",
+    "start": 0.15,
+    "end": 0.36,
+    "id": "w1"
+  },
+  {
+    "text": "month",
+    "start": 0.36,
+    "end": 0.62,
+    "id": "w2"
+  },
+  {
+    "text": "updates",
+    "start": 0.62,
+    "end": 0.99,
+    "id": "w3"
+  },
+  {
+    "text": "right",
+    "start": 0.99,
+    "end": 1.25,
+    "id": "w4"
+  },
+  {
+    "text": "away.",
+    "start": 1.25,
+    "end": 1.58,
+    "id": "w5"
+  }
+]

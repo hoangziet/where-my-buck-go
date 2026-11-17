@@ -124,7 +124,10 @@
     const tl = gsap.timeline({ paused: true });
     const BASE = 5 / 3;
     // Hook: per-word blur in, then a blur swap into the app
-    tl.fromTo("#c-hook span:not(:first-child)", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.14, stagger: 0.09, ease: "power2.out" }, 0.2);
+    // Each word lands as the voiceover says it (Whisper word timings, assets/voice/words/vo-1-hook.json).
+    [0.43, 0.63, 0.79].forEach((at, i) => {
+      tl.fromTo(`#c-hook span:nth-child(${i + 2})`, { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.14, ease: "power2.out" }, at);
+    });
     tl.to("#c-hook span", { opacity: 0, filter: "blur(8px)", duration: 0.18, stagger: 0.03, ease: "power2.in" }, 1.45);
     tl.fromTo("#c-cam",
       { opacity: 0, filter: "blur(12px)", scale: BASE * 1.04, x: 960 - 576 * BASE * 1.04, y: 540 - 324 * BASE * 1.04, transformOrigin: "0 0" },

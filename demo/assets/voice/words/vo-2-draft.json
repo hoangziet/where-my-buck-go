@@ -1,0 +1,44 @@
+[
+  {
+    "text": "it",
+    "start": 0.05,
+    "end": 0.12,
+    "id": "w0"
+  },
+  {
+    "text": "becomes",
+    "start": 0.12,
+    "end": 0.55,
+    "id": "w1"
+  },
+  {
+    "text": "a",
+    "start": 0.55,
+    "end": 0.58,
+    "id": "w2"
+  },
+  {
+    "text": "draft",
+    "start": 0.61,
+    "end": 0.84,
+    "id": "w3"
+  },
+  {
+    "text": "you",
+    "start": 0.93,
+    "end": 1.09,
+    "id": "w4"
+  },
+  {
+    "text": "can",
+    "start": 1.09,
+    "end": 1.27,
+    "id": "w5"
+  },
+  {
+    "text": "check.",
+    "start": 1.27,
+    "end": 1.68,
+    "id": "w6"
+  }
+]
