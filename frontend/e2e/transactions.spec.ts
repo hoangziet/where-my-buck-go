@@ -274,3 +274,35 @@ test("columns sort like a spreadsheet and range filters narrow the list", async 
   await page.getByRole("button", { name: "Clear filters" }).first().click();
   expect(await descriptions()).toHaveLength(3);
 });
+
+test("add transaction opens a manual form that saves and confirms without AI", async ({ page }) => {
+  let created: Record<string, unknown> | null = null;
+  let confirmed: Record<string, unknown> | null = null;
+  await page.route("**/api/proposals", async (route) => {
+    created = route.request().postDataJSON();
+    await route.fulfill({ status: 201, contentType: "application/json",
+      body: JSON.stringify({ ...proposal("edit"), id: "proposal-new", operation: "create", targetId: null, baseVersion: null }) });
+  });
+  await page.route("**/api/proposals/proposal-new/confirm", async (route) => {
+    confirmed = route.request().postDataJSON();
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({
+      proposal: { ...proposal("edit"), id: "proposal-new", state: "confirmed" },
+      transaction: { ...original, id: "t-new", description: "Phở bò", amount: "55000", occurredDate: "2026-11-15", occurredTime: "12:15" },
+    }) });
+  });
+  await openTransactions(page);
+
+  await page.getByRole("button", { name: "Add transaction" }).first().click();
+  const form = page.getByRole("heading", { name: "Add transaction" }).locator("..");
+  await form.getByLabel("Description").fill("Phở bò");
+  await form.getByLabel("Amount (VND)").fill("55000");
+  await form.getByLabel("Date").fill("2026-11-15");
+  await form.getByLabel("Time").fill("12:15");
+  await form.getByRole("button", { name: "Save transaction" }).click();
+
+  await expect(page.getByRole("row", { name: /Phở bò/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Add transaction" })).toHaveCount(0);
+  expect(created).toMatchObject({ expectedVersion: 0, amount: "55000", currency: "VND", direction: "expense",
+    description: "Phở bò", category: "food_drink", occurredDate: "2026-11-15", occurredTime: "12:15", period: null });
+  expect(confirmed).toEqual({ expectedVersion: 1 });
+});

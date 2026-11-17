@@ -169,6 +169,17 @@ export interface ProposalDto {
   evidenceIds: string[];
 }
 
+export function createTransactionDraft(
+  fields: { amount: string; direction: "income" | "expense"; description: string; category: Category;
+    occurredDate: string; occurredTime: string },
+  evidenceText: string,
+): Promise<ProposalDto> {
+  return request("/api/proposals", {
+    method: "POST",
+    body: { expectedVersion: 0, currency: "VND", period: null, evidenceText, ...fields },
+  });
+}
+
 export function proposeChange(
   operation: "edit" | "delete" | "undo",
   targetId: string,

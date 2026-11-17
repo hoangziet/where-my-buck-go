@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.route("https://uselessfacts.jsph.pl/**", (route) => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({ id: "f1", text: "Starfish have no brains.", source: "djtech.net",
+      source_url: "https://www.djtech.net/humor/shorty_useless_facts.htm", language: "en" }),
+  }));
+});
+
 test("owner can sign in, load the dashboard, and sign out", async ({ page }) => {
   let authenticated = false;
 
@@ -129,4 +137,29 @@ test("a transient network failure on launch retries instead of signing the owner
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
   await expect(page).toHaveURL(/\/dashboard$/);
   expect(sessionChecks).toBe(2);
+});
+
+test("dashboard shows a useless fact instead of the AI shortcuts and can fetch another", async ({ page }) => {
+  const facts = ["Starfish have no brains.", "Honey never spoils."];
+  let requests = 0;
+  await page.unrouteAll();
+  await page.route("https://uselessfacts.jsph.pl/**", (route) => {
+    const text = facts[Math.min(requests++, facts.length - 1)];
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ id: String(requests), text, source: "example.org", source_url: "https://example.org" }) });
+  });
+  await page.route("**/api/auth/me", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ username: "owner" }) }));
+  await page.route("**/api/reports/summary?months=**", (route) => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({ start: "2026-11-01", end: "2026-11-30", totals: { income: "0", expense: "0" }, months: [], categories: {} }),
+  }));
+  await page.route("**/api/transactions", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [] }) }));
+  await page.route("**/api/chat/pins", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [] }) }));
+
+  await page.goto("/dashboard");
+  const card = page.getByRole("region", { name: "Useless fact" }).first();
+  await expect(card).toContainText("Starfish have no brains.");
+  await expect(page.getByText("Add with AI")).toHaveCount(0);
+  await expect(page.getByText(/Ask or log anything/)).toHaveCount(0);
+  await card.getByRole("button", { name: "Show another fact" }).click();
+  await expect(card).toContainText("Honey never spoils.");
 });

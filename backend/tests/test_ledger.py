@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 from flask.testing import FlaskClient
@@ -354,7 +355,8 @@ def test_chat_missing_fields_and_invalid_items(ledger_client: tuple[FlaskClient,
     assert response.status_code == 200
     assert len(response.json["proposals"]) == 1 and len(response.json["errors"]) == 2
     draft = response.json["proposals"][0]
-    assert draft["amount"] is None and draft["occurredDate"] is None and not draft["canConfirm"]
+    assert draft["amount"] is None and not draft["canConfirm"]
+    assert draft["occurredDate"] == datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()
     assert client.post(f'/api/proposals/{draft["id"]}/confirm', json={"expectedVersion": 1},
                        headers=headers(csrf)).status_code == 400
 
@@ -470,7 +472,8 @@ def test_chat_follow_up_revises_pending_draft(ledger_client: tuple[FlaskClient, 
                        "parse_transactions": {"items": [{**chat_item("42000", "ăn hủ tiếu", day=""),
                                                          "occurredTime": ""}]}}
     draft = chat_post(client, csrf, "ăn hủ tiếu 42k").json["proposals"][0]
-    assert draft["occurredDate"] is None and not draft["canConfirm"]
+    assert draft["occurredDate"] == datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()
+    assert draft["canConfirm"]
 
     model.responses = {
         "route_message": {"specialist": "revise", "date": ""},

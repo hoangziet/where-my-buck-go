@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Bookmark, X } from "lucide-react";
+import { Bookmark, X } from "lucide-react";
 import { formatVND, formatNumber, appLocalMonth, appLocalMonthYear } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { Category, PinDto, ReportsSummary, TransactionDto } from "@/lib/api";
 import { CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { UselessFactCard } from "@/components/dashboard/UselessFactCard";
 
 const CATEGORY_COLORS: Record<Category, string> = {
   housing: "#14502F",
@@ -85,16 +86,9 @@ export default function DashboardPage() {
               {appLocalMonthYear(new Date())}
             </h1>
           </div>
-          <Link
-            href="/chat"
-            className="flex items-center gap-2 bg-accent text-white no-underline px-4 py-[11px] rounded-[10px] font-semibold text-sm transition-colors duration-150 hover:bg-accent-strong"
-          >
-            <Plus size={16} strokeWidth={2.2} />
-            Add with AI
-          </Link>
         </div>
 
-        <AskBar />
+        <UselessFactCard />
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
           <KpiCard label="Balance" value={loading ? "…" : formatVND(balance)} sub={`Last ${TRANSACTIONS_PAGE_LIMIT} transactions`} />
@@ -255,7 +249,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <AskBar mobile />
+        <UselessFactCard />
 
         <section className="bg-surface border border-border rounded-2xl p-4 flex flex-col gap-3">
           <h2 className="m-0 text-[15px] font-semibold">Spending by category</h2>
@@ -307,24 +301,6 @@ export default function DashboardPage() {
         </section>
       </div>
     </main>
-  );
-}
-
-function AskBar({ mobile = false }: { mobile?: boolean }) {
-  return (
-    <Link
-      href="/chat"
-      className={`flex items-center gap-3 bg-surface border border-border rounded-2xl no-underline text-muted transition-colors duration-150 hover:border-accent-soft-border hover:bg-accent-soft-bg ${
-        mobile ? "px-3.5 min-h-12" : "px-4.5 py-3.5"
-      }`}
-    >
-      <svg aria-hidden="true" width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
-      </svg>
-      <span className="flex-1 text-[14px]">
-        {mobile ? "Ask or log anything…" : 'Ask or log anything — "how much did I spend on coffee this month?"'}
-      </span>
-    </Link>
   );
 }
 
