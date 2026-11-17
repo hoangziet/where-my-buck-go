@@ -4,7 +4,8 @@
 
   **A personal finance assistant that keeps every decision in your hands.**
 
-  Say what you spent, or snap a receipt. The assistant prepares a draft; nothing reaches your ledger until you confirm it.
+  Say what you spent, snap a receipt, or just ask *"where did my money go this week?"* in plain language.
+  The assistant drafts entries for you to confirm and answers questions from your own ledger, showing the exact SQL it ran.
 
   [Live app](https://d1498jatb9ljtb.cloudfront.net) · [Deployment runbook](deploy/aws/README.md)
 </div>
@@ -12,6 +13,8 @@
 ---
 
 ## How it works
+
+### Log it
 
 <table>
   <tr>
@@ -26,6 +29,23 @@
   </tr>
 </table>
 
+### Ask it
+
+Ask about your money the way you would ask a friend, in Vietnamese or English: *"Hai ngày qua tôi đã chi bao nhiêu, cho mấy việc gì?"*, *"How much did I spend on food this month?"*, *"Which category did I spend the most on last month?"*
+
+<table>
+  <tr>
+    <td width="52%"><img src="docs/assets/demo-15s/ask-answer.png" alt="A plain-language question answered with a total and a table of the matching transactions" /></td>
+    <td width="48%"><img src="docs/assets/demo-15s/ask-sql.png" alt="The Steps and SQL panel showing the exact parameterized query that produced the answer" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>A real answer, not a guess</strong><br />Totals, the category breakdown and a table of the matching transactions, ready to pin to your dashboard.</td>
+    <td align="center"><strong>See exactly what ran</strong><br />Open <em>Steps &amp; SQL</em> to inspect every query and its parameters.</td>
+  </tr>
+</table>
+
+Gemini only interprets the question (for example, which date range you mean). The backend then runs fixed, parameterized SQL scoped to your account, and the model is given only those results to write the answer. It never sees anyone else's data, and you can always check its numbers against the queries.
+
 ## Product highlights
 
 - **Review before saving:** entries stay drafts until you explicitly confirm them.
@@ -35,7 +55,7 @@
 ### Core capabilities
 
 - Record income and expenses through chat or a single receipt image.
-- Ask owner-scoped questions about totals over supported date ranges.
+- Ask questions in natural language and get answers computed from your own ledger, with the SQL shown.
 - Preview and confirm creates, edits, deletes, and undo operations.
 - Browse evidence, reports, saved conversations, and filtered CSV exports.
 - Install it as a standalone PWA on iOS, or use it in any browser.
