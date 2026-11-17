@@ -1,0 +1,32 @@
+[
+  {
+    "text": "Just",
+    "start": 0.1,
+    "end": 0.21,
+    "id": "w0"
+  },
+  {
+    "text": "say",
+    "start": 0.21,
+    "end": 0.24,
+    "id": "w1"
+  },
+  {
+    "text": "what",
+    "start": 0.38,
+    "end": 0.58,
+    "id": "w2"
+  },
+  {
+    "text": "you",
+    "start": 0.58,
+    "end": 0.74,
+    "id": "w3"
+  },
+  {
+    "text": "spent.",
+    "start": 0.74,
+    "end": 1.12,
+    "id": "w4"
+  }
+]

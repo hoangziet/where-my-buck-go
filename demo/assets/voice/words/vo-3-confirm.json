@@ -1,0 +1,38 @@
+[
+  {
+    "text": "Nothing",
+    "start": 0.05,
+    "end": 0.43,
+    "id": "w0"
+  },
+  {
+    "text": "is",
+    "start": 0.43,
+    "end": 0.55,
+    "id": "w1"
+  },
+  {
+    "text": "saved",
+    "start": 0.55,
+    "end": 0.85,
+    "id": "w2"
+  },
+  {
+    "text": "until",
+    "start": 0.85,
+    "end": 1.14,
+    "id": "w3"
+  },
+  {
+    "text": "you",
+    "start": 1.17,
+    "end": 1.33,
+    "id": "w4"
+  },
+  {
+    "text": "confirm.",
+    "start": 1.33,
+    "end": 1.92,
+    "id": "w5"
+  }
+]
