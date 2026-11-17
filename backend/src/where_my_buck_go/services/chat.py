@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
-from where_my_buck_go.domain.ledger import InvalidProposal
+from where_my_buck_go.domain.ledger import InvalidProposal, ProposalRecord
 from where_my_buck_go.domain.money import InvalidMoney
 from where_my_buck_go.domain.transaction_time import (
     LOCAL_ZONE,
@@ -15,11 +15,17 @@ from where_my_buck_go.domain.transaction_time import (
 )
 from where_my_buck_go.services.debug_trace import current_trace, record_step
 from where_my_buck_go.services.history import HistoryService
-from where_my_buck_go.services.ledger import LedgerResult, LedgerService, LedgerSession, transaction_view
+from where_my_buck_go.services.ledger import (
+    LedgerResult,
+    LedgerService,
+    LedgerSession,
+    proposal_view,
+    transaction_view,
+)
 
 _ROUTE_FIELDS: dict[str, object] = {
     "type": "OBJECT", "properties": {
-        "specialist": {"type": "STRING", "enum": ["qa", "intake", "change"]},
+        "specialist": {"type": "STRING", "enum": ["qa", "intake", "change", "revise"]},
         "date": {"type": "STRING", "description": "hôm nay, hôm qua, YYYY-MM-DD, or empty"},
         "range": {"type": "STRING", "enum": ["single_day", "today", "yesterday", "this_month",
                                                  "last_month", "custom"]},
@@ -28,22 +34,28 @@ _ROUTE_FIELDS: dict[str, object] = {
     }, "required": ["specialist", "date"],
 }
 _CATEGORIES = ["food_drink", "transport", "bills", "shopping", "entertainment", "housing", "income", "other"]
-_ITEM: dict[str, object] = {
-    "type": "OBJECT", "properties": {
-        "amount": {"type": "STRING", "description": "Canonical VND digits, empty when missing"},
-        "currency": {"type": "STRING"}, "direction": {"type": "STRING", "enum": ["income", "expense"]},
-        "description": {"type": "STRING"}, "category": {"type": "STRING", "enum": _CATEGORIES},
-        "occurredDate": {"type": "STRING"},
-        "period": {"type": "STRING",
-                  "description": "Time-of-day word only: sáng, trưa, chiều, tối; empty if not mentioned"},
-        "occurredTime": {"type": "STRING",
-                         "description": "Strict 24-hour HH:MM ONLY if the message states an explicit clock "
-                                        "number (e.g. '7h30' -> '07:30', '19h' -> '19:00'); empty otherwise. "
-                                        "Never put a time-of-day word here."},
-    }, "required": ["amount", "currency", "direction", "description", "category",
-                    "occurredDate", "period", "occurredTime"],
+_ITEM_PROPERTIES: dict[str, object] = {
+    "amount": {"type": "STRING", "description": "Canonical VND digits, empty when missing"},
+    "currency": {"type": "STRING"}, "direction": {"type": "STRING", "enum": ["income", "expense"]},
+    "description": {"type": "STRING"}, "category": {"type": "STRING", "enum": _CATEGORIES},
+    "occurredDate": {"type": "STRING"},
+    "period": {"type": "STRING",
+              "description": "Time-of-day word only: sáng, trưa, chiều, tối; empty if not mentioned"},
+    "occurredTime": {"type": "STRING",
+                     "description": "Strict 24-hour HH:MM ONLY if the message states an explicit clock "
+                                    "number (e.g. '7h30' -> '07:30', '19h' -> '19:00'); empty otherwise. "
+                                    "Never put a time-of-day word here."},
 }
-_ITEM_KEYS = {"amount", "currency", "direction", "description", "category", "occurredDate", "period", "occurredTime"}
+_ITEM_REQUIRED = ["amount", "currency", "direction", "description", "category",
+                  "occurredDate", "period", "occurredTime"]
+_ITEM: dict[str, object] = {"type": "OBJECT", "properties": _ITEM_PROPERTIES, "required": _ITEM_REQUIRED}
+_ITEM_KEYS = set(_ITEM_REQUIRED)
+_REVISE_FIELDS: dict[str, object] = {
+    "type": "OBJECT",
+    "properties": {"proposalId": {"type": "STRING"}, **_ITEM_PROPERTIES},
+    "required": ["proposalId", *_ITEM_REQUIRED],
+}
+MAX_PENDING_PROPOSALS = 5
 _INTAKE_FIELDS: dict[str, object] = {"type": "OBJECT", "properties": {
     "items": {"type": "ARRAY", "items": _ITEM},
 }, "required": ["items"]}
@@ -76,7 +88,12 @@ class ChatService:
         self, owner: str, key: str, text: str, now: datetime, history: list[dict[str, str]],
         chat_id: str | None = None,
         client_timezone: str | None = None,
+        pending_proposal_ids: list[str] | None = None,
     ) -> LedgerResult:
+        pending_ids = pending_proposal_ids or []
+        if len(pending_ids) > MAX_PENDING_PROPOSALS or any(
+                not isinstance(item, str) or not 1 <= len(item) <= 64 for item in pending_ids):
+            raise InvalidProposal(f"At most {MAX_PENDING_PROPOSALS} pending draft IDs are allowed")
         if not 1 <= len(text) <= 2000 or len(history) > 8:
             raise InvalidProposal("Message must be 1-2000 characters; history at most eight turns")
         if any(not isinstance(item, dict) or set(item) != {"role", "text"} or
@@ -84,26 +101,39 @@ class ChatService:
                not isinstance(item["text"], str) or len(item["text"]) > 2000 for item in history):
             raise InvalidProposal("History must contain only bounded user and assistant text")
         body: dict[str, object] = {"text": text, "history": history, "expectedVersion": 0}
+        if pending_ids:
+            body["pendingProposalIds"] = pending_ids
 
         def coordinate(tx: LedgerSession, written: list[str]) -> LedgerResult:
             client_zone = resolve_client_zone(client_timezone)
             local_date = now.astimezone(client_zone).date().isoformat()
+            pending = self._pending_drafts(tx, owner, pending_ids)
+            context = self._conversation_context(history, pending)
             classification = self.model.call_function(
                 "Route this message in any language (Vietnamese with/without accents, English, etc.). "
                 "Financial questions or summaries -> qa, new income/expense transactions -> intake, "
-                "edit/delete/undo requests -> change. Ambiguous input -> qa. For questions select "
+                "edit/delete/undo requests for saved transactions -> change. "
+                + ("If the message only adds or corrects details (date, time, amount, category, description) "
+                   "of one of the pending drafts below instead of describing a new transaction -> revise. "
+                   if pending else "") +
+                "Ambiguous input -> qa. For questions select "
                 "today, yesterday, this_month, last_month or a custom date range with YYYY-MM-DD bounds; "
                 "for a single date use single_day and date. Do not guess missing dates. "
-                f"Local date: {local_date}. Message: " + text,
+                f"Local date: {local_date}. {context}Message: " + text,
                 "route_message", _ROUTE_FIELDS,
             )
             specialist = classification.get("specialist")
+            if specialist == "revise" and not pending:
+                specialist = "intake"
             specialist_label = {
                 "qa": "a financial question", "intake": "a new transaction", "change": "a transaction change",
+                "revise": "a correction to a pending draft",
             }
             label = specialist_label.get(str(specialist), "a question")
             record_step("Classify request", f"Gemini routed this as {label}.", data={"specialist": specialist})
-            if specialist == "intake":
+            if specialist == "revise":
+                result = self._revise(tx, written, owner, text, now, pending, context, client_zone=client_zone)
+            elif specialist == "intake":
                 result = self._intake(tx, written, owner, text, now, client_zone=client_zone)
             elif specialist == "change":
                 result = self._change(tx, written, owner, text, now, client_zone=client_zone)
@@ -188,6 +218,61 @@ class ChatService:
             data={"draftCount": len(proposals), "errorCount": len(errors)},
         )
         return LedgerResult({"kind": "intake", "proposals": proposals, "errors": errors, "message": message}, 200)
+
+    @staticmethod
+    def _pending_drafts(tx: LedgerSession, owner: str, identifiers: list[str]) -> list[ProposalRecord]:
+        drafts = (tx.proposal(owner, identifier) for identifier in dict.fromkeys(identifiers))
+        return [draft for draft in drafts
+                if draft is not None and draft.state == "draft" and draft.operation in ("create", "edit")]
+
+    @staticmethod
+    def _conversation_context(history: list[dict[str, str]], pending: list[ProposalRecord]) -> str:
+        parts: list[str] = []
+        if history:
+            parts.append("Recent conversation (oldest first): " + json.dumps(history[-6:], ensure_ascii=False))
+        if pending:
+            drafts = [{key: proposal_view(draft)[key] for key in (
+                "id", "amount", "direction", "description", "category", "occurredDate", "occurredTime", "period",
+                "timeSource")} for draft in pending]
+            parts.append("Pending drafts awaiting the owner's confirmation: " + json.dumps(drafts, ensure_ascii=False))
+        return "".join(part + ". " for part in parts)
+
+    def _revise(
+        self, tx: LedgerSession, written: list[str], owner: str, text: str, now: datetime,
+        pending: list[ProposalRecord], context: str, client_zone: ZoneInfo = LOCAL_ZONE,
+    ) -> LedgerResult:
+        local_date = now.astimezone(client_zone).date().isoformat()
+        revised = self.model.call_function(
+            "The owner's latest message adds or corrects details of one pending draft. Pick that draft's id as "
+            "proposalId and return all of its fields, changing only what the message states and keeping every "
+            "other field exactly as it is now. Resolve relative dates (hôm nay, hôm qua, tối qua, yesterday) to "
+            f"YYYY-MM-DD from today's date {local_date}; never a future date. 'period' is one of sáng, trưa, "
+            "chiều, tối or empty; 'occurredTime' is an explicit clock in 24-hour HH:MM or empty (e.g. "
+            "'tối qua 7h' -> period 'tối', occurredTime '19:00'). Keep an existing explicit time unless the "
+            f"message changes it. Use canonical integer VND digits for amount. {context}Message: " + text,
+            "revise_draft", _REVISE_FIELDS,
+        )
+        proposal_id = revised.get("proposalId")
+        target = next((draft for draft in pending if draft.id == proposal_id), None)
+        if target is None:
+            raise InvalidProposal("Gemini must pick one of the pending drafts")
+        fields = {key: value for key, value in revised.items() if key != "proposalId"}
+        record_step("Revise pending draft", "Gemini applied the message to a pending draft.",
+                    data={"proposalId": target.id, "fields": fields})
+        if set(fields) != _ITEM_KEYS:
+            raise InvalidProposal("Missing or unexpected draft fields")
+        payload: dict[str, object] = {**fields, "evidenceText": text, "expectedVersion": target.version}
+        for optional in ("occurredDate", "occurredTime", "period"):
+            if payload[optional] == "":
+                payload[optional] = None
+        try:
+            updated = self.ledger.amend_in_transaction(tx, owner, target.id, payload, now, written)
+        except (InvalidProposal, InvalidMoney, InvalidTransactionTime) as error:
+            return LedgerResult({"kind": "intake", "proposals": [], "errors": [{"index": 0, "error": str(error)}],
+                                 "message": "Chưa cập nhật được bản nháp. Kiểm tra lại thông tin."}, 200)
+        return LedgerResult({"kind": "intake", "proposals": [updated.body], "errors": [],
+                             "revisedProposalIds": [target.id],
+                             "message": "Đã cập nhật bản nháp; kiểm tra rồi xác nhận."}, 200)
 
     def _change(
         self, tx: LedgerSession, written: list[str], owner: str, text: str, now: datetime,
