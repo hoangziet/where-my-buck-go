@@ -12,7 +12,7 @@ The web app is the first delivery channel. Telegram is a possible later mileston
 - Frontend: Next.js, React, and TypeScript. The frontend and backend run as separate services in local Docker Compose; the Next.js frontend proxies API requests to the backend.
 - AI: Gemini structured function calls for chat routing and receipt extraction. The backend validates model output; the model cannot execute SQL or confirm ledger changes.
 - Evidence: private filesystem storage in local development; AWS S3 in the AWS deployment, with the Cloudflare R2 adapter retained for legacy deployments. Production startup validates the selected evidence provider configuration.
-- Deployment: local Docker Compose is supported. Production deployment and a background worker are future work; there is no outbox worker currently.
+- Deployment: local Docker Compose is supported. Production is deployed on AWS with EC2 and CloudFront, managed RDS PostgreSQL, private S3 evidence storage, and Terraform-managed infrastructure. There is no background outbox worker.
 
 The selected production target is AWS: EC2 and CloudFront for the application, managed RDS PostgreSQL outside
 Docker, private S3 evidence storage, and an AWS-provided HTTPS address without a purchased domain.
@@ -43,7 +43,7 @@ Backend responsibilities are separated into `api/` (HTTP, auth, validation), `do
 - Mutating authenticated requests require a CSRF token. Login attempts are rate-limited using an HMAC digest of the client address.
 - Treat chat, captions, receipt contents, and model responses as untrusted input. Validate all data before applying business rules. Never log secrets or raw financial content.
 
-## Quality and Roadmap
+## Quality and Maintenance
 
 Keep modules cohesive, public Python APIs typed, and TypeScript strict. Cover money, date/time, authorization, idempotency, and draft-confirm behavior with tests. Run the backend tests, Ruff, mypy, frontend lint, and frontend build before reporting a code change as complete.
 

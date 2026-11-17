@@ -1,0 +1,190 @@
+<template>
+  <style>
+    @font-face { font-family: "Space Grotesk"; font-weight: 600; src: url("assets/fonts/space-grotesk-600.woff2") format("woff2"); }
+    @font-face { font-family: "Space Grotesk"; font-weight: 700; src: url("assets/fonts/space-grotesk-700.woff2") format("woff2"); }
+    #root {
+      position: absolute; inset: 0; overflow: hidden;
+      background: #fbfaf6; color: #16201a;
+      font-family: Inter, system-ui, sans-serif;
+      --accent: #1f6b44; --accent-strong: #14502f; --soft-bg: #eef5f0; --soft-border: #bfdcc9; --chart-light: #a9d3b8;
+      --border: #e8e6de; --row: #f1efe9; --nav-border: #eceae2; --muted: #5b665e; --ink-2: #33403a; --ink-3: #4a554d;
+    }
+    #m-stage { position: absolute; inset: 0; }
+    #m-cam { position: absolute; left: 0; top: 0; width: 1152px; height: 648px; background: #fbfaf6; opacity: 0; }
+    .m-nav { position: absolute; left: 0; top: 0; right: 0; height: 72px; background: #fff; border-bottom: 1px solid var(--nav-border);
+      display: flex; align-items: center; padding: 0 28px; gap: 32px; }
+    .m-brand { display: flex; align-items: center; gap: 10px; font-family: "Space Grotesk", Inter, sans-serif; font-weight: 700; font-size: 16px; white-space: nowrap; }
+    .mark { display: inline-flex; align-items: center; justify-content: center; background: var(--accent); border-radius: 8px; flex: none; }
+    .m-links { display: flex; gap: 4px; flex: 1; }
+    .m-link { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 10px; font-size: 14px; font-weight: 500; color: var(--ink-3); }
+    .m-link.on { background: var(--soft-bg); color: var(--accent-strong); font-weight: 600; }
+    .m-user { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
+    .m-avatar { width: 32px; height: 32px; border-radius: 50%; background: #e3ede6; color: var(--accent-strong); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+    .m-head { position: absolute; left: 40px; right: 40px; top: 92px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .m-head small { display: block; font-size: 13px; color: var(--muted); }
+    .m-head h1 { font-family: "Space Grotesk", Inter, sans-serif; font-weight: 600; font-size: 28px; letter-spacing: -.02em; }
+    .m-add { display: flex; align-items: center; gap: 8px; background: var(--accent); color: #fff; padding: 11px 16px; border-radius: 10px; font-size: 14px; font-weight: 600; }
+    .m-kpis { position: absolute; left: 40px; right: 40px; top: 160px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .m-kpi { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 20px; height: 104px; display: flex; flex-direction: column; gap: 6px; }
+    .m-kpi span { font-size: 13px; color: var(--muted); }
+    .m-kpi strong { font-family: "Space Grotesk", Inter, sans-serif; font-weight: 600; font-size: 26px; letter-spacing: -.02em; }
+    .m-kpi em { font-style: normal; font-size: 12px; color: var(--muted); }
+    .m-bar { height: 6px; background: #efede6; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+    .m-bar i { display: block; height: 100%; background: var(--accent); }
+    .m-row2 { position: absolute; left: 40px; right: 40px; top: 284px; height: 210px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .m-card { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 20px 22px; }
+    .m-card h2 { font-size: 16px; font-weight: 600; }
+    .m-card .sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .m-legend { position: absolute; right: 22px; top: 22px; display: flex; gap: 14px; font-size: 12px; color: var(--ink-3); }
+    .m-legend b { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+    .m-chart { position: relative; margin-top: 14px; height: 108px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; align-items: end; border-bottom: 1px solid var(--border);
+      background-image: linear-gradient(#f1efe9 1px, transparent 1px); background-size: 100% 27px; }
+    .m-month { display: flex; gap: 4px; align-items: flex-end; justify-content: center; height: 100%; }
+    .m-month i { width: 18px; border-radius: 4px 4px 0 0; transform-origin: 50% 100%; }
+    .m-month .inc { background: var(--accent); }
+    .m-month .exp { background: var(--chart-light); }
+    .m-axis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; font-size: 12px; color: var(--muted); text-align: center; margin-top: 6px; }
+    .m-cats { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; }
+    .m-cat { display: grid; grid-template-columns: 110px 1fr 104px; gap: 12px; align-items: center; font-size: 14px; }
+    .m-track { height: 8px; background: var(--row); border-radius: 99px; overflow: hidden; }
+    .m-track i { display: block; height: 100%; border-radius: 99px; transform-origin: 0 50%; }
+    .m-cat .v { font-family: "IBM Plex Mono", monospace; font-size: 13px; text-align: right; }
+    .m-recent { position: absolute; left: 40px; right: 40px; top: 514px; height: 200px; background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 18px 22px; }
+    .m-recent-head { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+    .m-recent-head h2 { font-size: 16px; font-weight: 600; }
+    .m-tx { display: flex; align-items: center; gap: 12px; padding: 10px 8px; margin: 6px -8px 0; border-radius: 8px; border-bottom: 1px solid var(--row); }
+    .m-tx .ab { width: 36px; height: 36px; border-radius: 10px; background: #f4f2ec; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--ink-3); }
+    .m-tx .d { flex: 1; display: flex; flex-direction: column; }
+    .m-tx .d span { font-weight: 500; font-size: 14px; }
+    .m-tx .d small { font-size: 12px; color: var(--muted); }
+    .m-tx .a { font-family: "IBM Plex Mono", monospace; font-size: 14px; font-weight: 500; }
+    #m-tx-new { background: var(--soft-bg); }
+    /* Carried ProposalCard (same build as chat scene) */
+    .pc { position: absolute; left: 0; top: 0; width: 460px; height: 292px; background: #fff; border: 1px solid #bfdcc9; border-radius: 16px; overflow: hidden;
+      box-shadow: 0 8px 24px -20px rgba(22,32,26,.28); font-family: Inter, system-ui, sans-serif; color: #16201a; z-index: 5; }
+    .pc-head { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: #fcfbf8; border-bottom: 1px solid var(--row); }
+    .pc-title { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--accent-strong); }
+    .pc-pill { border: 1px solid var(--soft-border); background: var(--soft-bg); color: var(--accent-strong); border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 500; }
+    .pc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--row); padding: 1px; }
+    .pc-cell { background: #fff; padding: 11px 16px; }
+    .pc-cell.wide { grid-column: span 2; }
+    .pc-cell dt { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+    .pc-cell dd { margin-top: 4px; }
+    .pc-desc { font-weight: 600; font-size: 16px; }
+    .pc-amt { font-family: "IBM Plex Mono", monospace; font-size: 18px; font-weight: 500; }
+    .pc-cat { font-size: 14px; font-weight: 500; }
+    .pc-date { font-size: 14px; color: var(--ink-2); }
+    .pc-actions { position: relative; height: 70px; padding: 13px 16px; }
+    .pc-saved { position: absolute; left: 16px; top: 13px; height: 44px; display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--accent-strong); }
+    #m-line { position: absolute; left: 0; right: 0; top: 852px; display: flex; justify-content: center; z-index: 6; }
+    #m-line div { opacity: 0; background: #16201a; color: #fff; border-radius: 999px; padding: 20px 40px; font-family: "Space Grotesk", Inter, sans-serif; font-weight: 600; font-size: 50px; letter-spacing: -.03em; display: flex; gap: 14px; }
+    #m-line span { display: inline-block; opacity: 0; }
+    #m-line .accent { color: #a9d3b8; }
+  </style>
+  <div id="root" data-composition-id="month" data-width="1920" data-height="1080" data-layout-allow-overflow>
+    <div id="m-stage" class="clip" data-start="0" data-duration="4.2" data-track-index="0" data-layout-allow-overflow data-layout-allow-overlap>
+      <div id="m-cam">
+        <header class="m-nav">
+          <div class="m-brand">
+            <span class="mark" style="width:30px;height:30px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.6 5 3 5 1.3 5 3.3-2.2 3.2-5 3.2-5-1.2-5-3"/></svg></span>
+            Where My Buck Go
+          </div>
+          <nav class="m-links">
+            <div class="m-link on"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Dashboard</div>
+            <div class="m-link"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>AI Chat</div>
+            <div class="m-link"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h.01M3 18h.01M3 6h.01M8 12h13M8 18h13M8 6h13"/></svg>Transactions</div>
+          </nav>
+          <div class="m-user"><span class="m-avatar">LI</span>linh</div>
+        </header>
+        <div class="m-head">
+          <div><small>Good to see you, linh</small><h1>November 2026</h1></div>
+          <div class="m-add"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg>Add with AI</div>
+        </div>
+        <div class="m-kpis">
+          <div class="m-kpi"><span>Balance</span><strong>+15.200.000 ₫</strong><em>Last 100 transactions</em></div>
+          <div class="m-kpi"><span>Income</span><strong style="color:#1f6b44">+18.500.000 ₫</strong><em>This month</em></div>
+          <div class="m-kpi" id="m-kpi-exp"><span>Expenses</span><strong id="m-exp">−3.215.000 ₫</strong><em>This month</em></div>
+          <div class="m-kpi"><span>Saved this month</span><strong id="m-saved">83%</strong><div class="m-bar"><i id="m-saved-bar" style="width:83%"></i></div></div>
+        </div>
+        <div class="m-row2">
+          <section class="m-card" style="position:relative">
+            <h2>Income vs expenses</h2><div class="sub">Last 6 months</div>
+            <div class="m-legend"><span><b style="background:#1f6b44"></b>Income</span><span><b style="background:#a9d3b8"></b>Expenses</span></div>
+            <div class="m-chart">
+              <div class="m-month"><i class="inc" style="height:88%"></i><i class="exp" style="height:22%"></i></div>
+              <div class="m-month"><i class="inc" style="height:88%"></i><i class="exp" style="height:27%"></i></div>
+              <div class="m-month"><i class="inc" style="height:92%"></i><i class="exp" style="height:19%"></i></div>
+              <div class="m-month"><i class="inc" style="height:88%"></i><i class="exp" style="height:25%"></i></div>
+              <div class="m-month"><i class="inc" style="height:95%"></i><i class="exp" style="height:21%"></i></div>
+              <div class="m-month"><i class="inc" style="height:96%"></i><i class="exp" id="m-nov-exp" style="height:17%"></i></div>
+            </div>
+            <div class="m-axis"><span>06</span><span>07</span><span>08</span><span>09</span><span>10</span><span>11</span></div>
+          </section>
+          <section class="m-card">
+            <h2>Spending by category</h2><div class="sub" id="m-cat-total">This month · 3.215.000 ₫</div>
+            <div class="m-cats">
+              <div class="m-cat"><span>Food &amp; Drink</span><div class="m-track"><i id="m-food" style="width:100%;background:#1f6b44"></i></div><span class="v" id="m-food-v">1.245.000 ₫</span></div>
+              <div class="m-cat"><span>Bills</span><div class="m-track"><i style="width:73.7%;background:#5f9e78"></i></div><span class="v">980.000 ₫</span></div>
+              <div class="m-cat"><span>Transport</span><div class="m-track"><i style="width:44%;background:#a9d3b8"></i></div><span class="v">585.000 ₫</span></div>
+              <div class="m-cat"><span>Shopping</span><div class="m-track"><i style="width:30.5%;background:#e2c27a"></i></div><span class="v">405.000 ₫</span></div>
+            </div>
+          </section>
+        </div>
+        <section class="m-recent">
+          <div class="m-recent-head"><h2>Recent transactions</h2><span>View all</span></div>
+          <div class="m-tx" id="m-tx-new"><span class="ab">LU</span><div class="d"><span>Lunch at Phở Hòa</span><small>Food &amp; Drink · 2026-11-17 12:30</small></div><span class="a">−85.000 ₫</span></div>
+          <div class="m-tx"><span class="ab">GR</span><div class="d"><span>Grab to office</span><small>Transport · 2026-11-17 08:10</small></div><span class="a">−48.000 ₫</span></div>
+        </section>
+      </div>
+
+      <article class="pc" id="m-card">
+        <header class="pc-head">
+          <div class="pc-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg>Draft preview</div>
+          <span class="pc-pill">Review before saving</span>
+        </header>
+        <dl class="pc-grid">
+          <div class="pc-cell wide"><dt>Description</dt><dd class="pc-desc">Lunch at Phở Hòa</dd></div>
+          <div class="pc-cell"><dt>Amount</dt><dd class="pc-amt">−85.000 ₫</dd></div>
+          <div class="pc-cell"><dt>Category</dt><dd class="pc-cat">Food &amp; Drink</dd></div>
+          <div class="pc-cell wide"><dt>Date &amp; time</dt><dd class="pc-date">2026-11-17 · noon 12:30</dd></div>
+        </dl>
+        <div class="pc-actions"><div class="pc-saved"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Saved</div></div>
+      </article>
+
+      <div id="m-line"><div><span>Your</span><span>month,</span><span class="accent">already</span><span class="accent">updated.</span></div></div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    const BASE = 5 / 3;
+    const fmt = (n) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    // Carried card: starts exactly where the chat scene left it, shrinks into the Recent row
+    tl.fromTo("#m-card", { x: 960 - 660 * 2.9 + 430 * 2.9, y: 540 - 376 * 2.9 + 230 * 2.9, scale: 2.9, transformOrigin: "0 0", opacity: 1, filter: "blur(0px)" },
+      { x: 700, y: 905, scale: 0.85, duration: 0.7, ease: "power3.inOut" }, 0.1);
+    tl.to("#m-card", { filter: "blur(6px)", duration: 0.35, ease: "power2.in" }, 0.1);
+    tl.to("#m-card", { filter: "blur(0px)", opacity: 0, duration: 0.3, ease: "power2.out" }, 0.5);
+    tl.fromTo("#m-cam", { opacity: 0, filter: "blur(15px)", scale: BASE * 1.05, x: 960 - 576 * BASE * 1.05, y: 540 - 324 * BASE * 1.05, transformOrigin: "0 0" },
+      { opacity: 1, filter: "blur(0px)", scale: BASE, x: 0, y: 0, duration: 0.65, ease: "expo.out" }, 0.25);
+    tl.fromTo("#m-tx-new", { opacity: 0, y: -8 }, { opacity: 1, y: 0, duration: 0.35, ease: "expo.out" }, 0.62);
+    tl.to("#m-tx-new", { backgroundColor: "rgba(238,245,240,0)", duration: 0.9, ease: "power1.out" }, 1.6);
+    // Totals tick up by the confirmed 85.000
+    const counter = { v: 0 };
+    tl.fromTo(counter, { v: 0 }, { v: 85000, duration: 0.8, ease: "power2.out", onUpdate: () => {
+      document.querySelector("#m-exp").textContent = "−" + fmt(3215000 + counter.v) + " ₫";
+      document.querySelector("#m-food-v").textContent = fmt(1245000 + counter.v) + " ₫";
+      document.querySelector("#m-cat-total").textContent = "This month · " + fmt(3215000 + counter.v) + " ₫";
+      const pct = Math.round(((18500000 - 3215000 - counter.v) / 18500000) * 100);
+      document.querySelector("#m-saved").textContent = pct + "%";
+    } }, 0.85);
+    tl.fromTo("#m-kpi-exp", { borderColor: "#bfdcc9" }, { borderColor: "#e8e6de", duration: 1.2, ease: "power1.out" }, 0.85);
+    tl.fromTo("#m-nov-exp", { scaleY: 1 }, { scaleY: 1.06, duration: 0.8, ease: "power2.out" }, 0.85);
+    tl.fromTo("#m-food", { scaleX: 1245 / 1330 }, { scaleX: 1, duration: 0.8, ease: "power2.out" }, 0.85);
+    // Camera eases onto the numbers
+    tl.to("#m-cam", { scale: 2.6, x: 960 - 848 * 2.6, y: 540 - 357 * 2.6, duration: 0.7, ease: "power2.inOut" }, 1.55);
+    tl.fromTo("#m-line div", { opacity: 0, scaleX: 0.5, filter: "blur(10px)" }, { opacity: 1, scaleX: 1, filter: "blur(0px)", duration: 0.25, ease: "power3.out" }, 1.9);
+    tl.fromTo("#m-line span", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.14, stagger: 0.08, ease: "power2.out" }, 2.0);
+    // Blur swap out; ground stays
+    tl.to("#m-stage", { opacity: 0, filter: "blur(8px)", duration: 0.2, ease: "power2.in" }, 3.95);
+    window.__timelines["month"] = tl;
+  </script>
+</template>

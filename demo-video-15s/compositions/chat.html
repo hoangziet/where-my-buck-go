@@ -1,0 +1,155 @@
+<template>
+  <style>
+    @font-face { font-family: "Space Grotesk"; font-weight: 600; src: url("assets/fonts/space-grotesk-600.woff2") format("woff2"); }
+    @font-face { font-family: "Space Grotesk"; font-weight: 700; src: url("assets/fonts/space-grotesk-700.woff2") format("woff2"); }
+    #root {
+      position: absolute; inset: 0; overflow: hidden;
+      background: #fbfaf6; color: #16201a;
+      font-family: Inter, system-ui, sans-serif;
+      --accent: #1f6b44; --accent-strong: #14502f; --soft-bg: #eef5f0; --soft-border: #bfdcc9;
+      --border: #e8e6de; --row: #f1efe9; --nav-border: #eceae2; --muted: #5b665e; --ink-2: #33403a; --ink-3: #4a554d;
+    }
+    /* Hook */
+    #c-hook { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 30px;
+      font-family: "Space Grotesk", Inter, sans-serif; font-weight: 700; font-size: 124px; letter-spacing: -0.045em; }
+    #c-hook span { display: inline-block; opacity: 0; }
+    #c-hook .accent { color: var(--accent); }
+    /* App camera: 1152x648 logical UI */
+    #c-cam { position: absolute; left: 0; top: 0; width: 1152px; height: 648px; background: #fbfaf6; opacity: 0; }
+    .c-nav { position: absolute; left: 0; top: 0; right: 0; height: 72px; background: #fff; border-bottom: 1px solid var(--nav-border);
+      display: flex; align-items: center; padding: 0 28px; gap: 32px; }
+    .c-brand { display: flex; align-items: center; gap: 10px; font-family: "Space Grotesk", Inter, sans-serif; font-weight: 700; font-size: 16px; white-space: nowrap; }
+    .mark { display: inline-flex; align-items: center; justify-content: center; background: var(--accent); border-radius: 8px; flex: none; }
+    .c-links { display: flex; gap: 4px; flex: 1; }
+    .c-link { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 10px; font-size: 14px; font-weight: 500; color: var(--ink-3); }
+    .c-link.on { background: var(--soft-bg); color: var(--accent-strong); font-weight: 600; }
+    .c-user { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
+    .c-avatar { width: 32px; height: 32px; border-radius: 50%; background: #e3ede6; color: var(--accent-strong); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+    .c-icon { width: 36px; height: 36px; display: grid; place-items: center; color: var(--ink-3); }
+    .c-side { position: absolute; left: 0; top: 72px; bottom: 0; width: 260px; background: #fff; border-right: 1px solid var(--row); padding: 12px; }
+    .c-new { height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border: 1px solid #e3e1d8; border-radius: 12px; font-size: 14px; font-weight: 500; color: #16201a; }
+    .c-group { padding: 14px 8px 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    .c-item { padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--ink-2); }
+    .c-item.on { background: #f4f2ec; color: #16201a; font-weight: 500; }
+    .c-bubble { position: absolute; right: 126px; top: 104px; background: #16201a; color: #fff; padding: 12px 16px; border-radius: 16px 16px 4px 16px; font-size: 15px; transform-origin: 100% 50%; opacity: 0; }
+    .c-ai { position: absolute; left: 386px; top: 166px; width: 640px; display: flex; gap: 14px; align-items: flex-start; }
+    .c-ai p { font-size: 15px; line-height: 1.5; padding-top: 4px; color: #16201a; }
+    .c-ai p span { color: #c9cec9; }
+    #c-logo { opacity: 0; }
+    .c-composer { position: absolute; left: 386px; top: 568px; width: 640px; height: 56px; background: #fff; border: 1px solid #e3e1d8; border-radius: 18px;
+      display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 18px; font-size: 14px; color: #8a938c; }
+    .c-send { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; opacity: .5; }
+    #c-veil { position: absolute; inset: 0; background: #fbfaf6; opacity: 0; z-index: 4; }
+    /* ProposalCard (mirrors frontend chat/page.tsx) */
+    .pc { position: absolute; width: 460px; height: 292px; background: #fff; border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+      box-shadow: 0 8px 24px -20px rgba(22,32,26,.28); font-family: Inter, system-ui, sans-serif; color: #16201a; }
+    .pc-head { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: #fcfbf8; border-bottom: 1px solid var(--row); }
+    .pc-title { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--accent-strong); }
+    .pc-pill { border: 1px solid var(--soft-border); background: var(--soft-bg); color: var(--accent-strong); border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 500; }
+    .pc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--row); padding: 1px; }
+    .pc-cell { background: #fff; padding: 11px 16px; }
+    .pc-cell.wide { grid-column: span 2; }
+    .pc-cell dt { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+    .pc-cell dd { margin-top: 4px; }
+    .pc-desc { font-weight: 600; font-size: 16px; }
+    .pc-amt { font-family: "IBM Plex Mono", monospace; font-size: 18px; font-weight: 500; }
+    .pc-cat { font-size: 14px; font-weight: 500; }
+    .pc-date { font-size: 14px; color: var(--ink-2); }
+    .pc-actions { position: relative; height: 70px; padding: 13px 16px; }
+    .pc-btns { display: flex; gap: 8px; }
+    .pc-confirm { height: 44px; padding: 0 16px; border-radius: 10px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; display: grid; place-items: center; }
+    .pc-discard { height: 44px; padding: 0 12px; border-radius: 10px; color: var(--ink-3); font-size: 14px; font-weight: 500; display: grid; place-items: center; }
+    .pc-saved { position: absolute; left: 16px; top: 13px; height: 44px; display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--accent-strong); }
+    #c-card { left: 430px; top: 230px; z-index: 5; opacity: 0; }
+    #c-saved { opacity: 0; }
+    #c-cursor { position: absolute; left: 0; top: 0; width: 64px; height: 64px; z-index: 10; opacity: 0; }
+  </style>
+  <div id="root" data-composition-id="chat" data-width="1920" data-height="1080" data-layout-allow-overflow>
+    <div id="c-hook" class="clip" data-start="0" data-duration="1.75" data-track-index="1">
+      <span style="opacity:1">Say</span><span>what</span><span>you</span><span class="accent">spent.</span>
+    </div>
+
+    <div id="c-cam" class="clip" data-start="1.4" data-duration="6.4" data-track-index="0" data-layout-allow-overflow data-layout-allow-overlap>
+      <header class="c-nav">
+        <div class="c-brand">
+          <span class="mark" style="width:30px;height:30px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.6 5 3 5 1.3 5 3.3-2.2 3.2-5 3.2-5-1.2-5-3"/></svg></span>
+          Where My Buck Go
+        </div>
+        <nav class="c-links">
+          <div class="c-link"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Dashboard</div>
+          <div class="c-link on"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>AI Chat</div>
+          <div class="c-link"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h.01M3 18h.01M3 6h.01M8 12h13M8 18h13M8 6h13"/></svg>Transactions</div>
+        </nav>
+        <div class="c-user"><span class="c-avatar">LI</span>linh</div>
+        <div class="c-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></div>
+      </header>
+      <aside class="c-side">
+        <div class="c-new"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1f6b44" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg>New chat</div>
+        <div class="c-group">Recent</div>
+        <div class="c-item on">Lunch at Phở Hòa</div>
+        <div class="c-item">Grab rides this week</div>
+        <div class="c-item">October spending</div>
+        <div class="c-item">Electricity bill</div>
+      </aside>
+      <div class="c-bubble" id="c-bubble">Lunch at Phở Hòa, 85k</div>
+      <div class="c-ai">
+        <span class="mark" id="c-logo" style="width:30px;height:30px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.6 5 3 5 1.3 5 3.3-2.2 3.2-5 3.2-5-1.2-5-3"/></svg></span>
+        <p id="c-reply"><span>Here’s</span> <span>a</span> <span>draft.</span> <span>Nothing</span> <span>is</span> <span>saved</span> <span>until</span> <span>you</span> <span>confirm.</span></p>
+      </div>
+      <article class="pc" id="c-card">
+        <header class="pc-head">
+          <div class="pc-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg>Draft preview</div>
+          <span class="pc-pill">Review before saving</span>
+        </header>
+        <dl class="pc-grid">
+          <div class="pc-cell wide c-row"><dt>Description</dt><dd class="pc-desc">Lunch at Phở Hòa</dd></div>
+          <div class="pc-cell c-row"><dt>Amount</dt><dd class="pc-amt">−85.000 ₫</dd></div>
+          <div class="pc-cell c-row"><dt>Category</dt><dd class="pc-cat">Food &amp; Drink</dd></div>
+          <div class="pc-cell wide c-row"><dt>Date &amp; time</dt><dd class="pc-date">2026-11-17 · noon 12:30</dd></div>
+        </dl>
+        <div class="pc-actions">
+          <div class="pc-btns" id="c-btns"><div class="pc-confirm" id="c-confirm">Confirm</div><div class="pc-discard">Discard</div></div>
+          <div class="pc-saved" id="c-saved"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Saved</div>
+        </div>
+      </article>
+      <div class="c-composer">Log a spend, attach a receipt, or ask about your money…<span class="c-send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7M12 19V5"/></svg></span></div>
+      <div id="c-veil"></div>
+    </div>
+
+    <svg id="c-cursor" class="clip" data-start="4.3" data-duration="2.4" data-track-index="2" viewBox="0 0 24 24">
+      <path d="M3 2.5 L3 19.5 L7.6 15.4 L10.6 22 L13.6 20.7 L10.7 14.2 L17 14.2 Z" fill="#16201a" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    const BASE = 5 / 3;
+    // Hook: per-word blur in, then a blur swap into the app
+    tl.fromTo("#c-hook span:not(:first-child)", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.14, stagger: 0.09, ease: "power2.out" }, 0.2);
+    tl.to("#c-hook span", { opacity: 0, filter: "blur(8px)", duration: 0.18, stagger: 0.03, ease: "power2.in" }, 1.45);
+    tl.fromTo("#c-cam",
+      { opacity: 0, filter: "blur(12px)", scale: BASE * 1.04, x: 960 - 576 * BASE * 1.04, y: 540 - 324 * BASE * 1.04, transformOrigin: "0 0" },
+      { opacity: 1, filter: "blur(0px)", scale: BASE, x: 0, y: 0, duration: 0.6, ease: "expo.out" }, 1.5);
+    // User message: bubble morphs open
+    tl.fromTo("#c-bubble", { opacity: 0, scaleX: 0.4, filter: "blur(6px)" }, { opacity: 1, scaleX: 1, filter: "blur(0px)", duration: 0.32, ease: "power3.out" }, 1.85);
+    // Assistant reply: logo, then words grey to ink
+    tl.fromTo("#c-logo", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 2.45);
+    tl.fromTo("#c-reply span", { color: "#c9cec9" }, { color: "#16201a", duration: 0.12, stagger: 0.07, ease: "none" }, 2.55);
+    // Draft card populates
+    tl.fromTo("#c-card", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" }, 3.05);
+    tl.fromTo("#c-card .c-row", { opacity: 0 }, { opacity: 1, duration: 0.2, stagger: 0.06 }, 3.15);
+    // Punch in on the card (2.9x of logical UI)
+    tl.to("#c-cam", { scale: 2.9, x: 960 - 660 * 2.9, y: 540 - 376 * 2.9, duration: 0.65, ease: "power2.inOut" }, 3.7);
+    // Cursor arrives at Confirm, clicks
+    tl.fromTo("#c-cursor", { opacity: 1, x: 1560, y: 1180 }, { opacity: 1, x: 478, y: 856, duration: 0.75, ease: "power3.out" }, 4.35);
+    tl.to("#c-cursor", { scale: 0.88, transformOrigin: "10% 10%", duration: 0.07, ease: "power2.in" }, 5.3);
+    tl.to("#c-cursor", { scale: 1, duration: 0.12, ease: "power2.out" }, 5.37);
+    tl.to("#c-confirm", { scale: 0.95, duration: 0.07, ease: "power2.in" }, 5.3);
+    tl.set("#c-btns", { opacity: 0 }, 5.37);
+    tl.fromTo("#c-saved", { opacity: 0, x: -6 }, { opacity: 1, x: 0, duration: 0.3, ease: "expo.out" }, 5.37);
+    tl.to("#c-card", { borderColor: "#bfdcc9", duration: 0.3 }, 5.37);
+    tl.to("#c-cursor", { x: 820, y: 1180, duration: 0.35, ease: "power3.in" }, 6.2);
+    // Everything but the saved card falls away; month scene carries the card on
+    tl.fromTo("#c-veil", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.inOut" }, 7.15);
+    window.__timelines["chat"] = tl;
+  </script>
+</template>

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" role="img" aria-labelledby="title desc">
+  <title id="title">Where My Buck Go</title>
+  <desc id="desc">Abstract illustration of clear personal finances, with a spending card, receipt, and savings chart.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fbfaf5"/><stop offset="1" stop-color="#eaf1e9"/></linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#206d4b"/><stop offset="1" stop-color="#124d35"/></linearGradient>
+    <filter id="shadow" x="-.2" y="-.2" width="1.5" height="1.5"><feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#153d2a" flood-opacity=".14"/></filter>
+  </defs>
+  <rect width="1200" height="480" rx="34" fill="url(#bg)"/>
+  <circle cx="1010" cy="78" r="145" fill="#dceade"/>
+  <circle cx="1020" cy="408" r="104" fill="#f1e6c9" opacity=".65"/>
+  <g filter="url(#shadow)" transform="rotate(-7 852 238)">
+    <rect x="700" y="96" width="322" height="242" rx="24" fill="#fff"/>
+    <rect x="730" y="125" width="126" height="15" rx="7" fill="#dce8dc"/>
+    <rect x="730" y="160" width="246" height="1" fill="#e8ece6"/>
+    <circle cx="749" cy="195" r="16" fill="#e8f3e9"/><path d="M742 195h14m-7-7v14" stroke="#277950" stroke-width="3" stroke-linecap="round"/>
+    <rect x="780" y="187" width="101" height="11" rx="5" fill="#cdd8cf"/><rect x="780" y="205" width="66" height="8" rx="4" fill="#e2e8e2"/>
+    <rect x="909" y="190" width="73" height="11" rx="5" fill="#176b49"/>
+    <circle cx="749" cy="255" r="16" fill="#f7f0df"/><path d="M742 253h14m-10-4c3-4 8 3 10-1m-10 10c3 4 8-3 10 1" stroke="#b8842b" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <rect x="780" y="247" width="114" height="11" rx="5" fill="#cdd8cf"/><rect x="780" y="265" width="68" height="8" rx="4" fill="#e2e8e2"/>
+    <rect x="907" y="250" width="75" height="11" rx="5" fill="#c47a52"/>
+    <rect x="730" y="298" width="247" height="20" rx="10" fill="#eff5ef"/><rect x="744" y="304" width="90" height="8" rx="4" fill="#6f9d7d"/>
+  </g>
+  <g filter="url(#shadow)" transform="rotate(8 563 248)">
+    <rect x="500" y="116" width="144" height="206" rx="18" fill="#fff"/>
+    <rect x="524" y="140" width="78" height="10" rx="5" fill="#176b49"/>
+    <rect x="524" y="169" width="96" height="7" rx="3.5" fill="#e2e8e2"/>
+    <rect x="524" y="189" width="67" height="7" rx="3.5" fill="#e2e8e2"/>
+    <rect x="524" y="218" width="95" height="1" fill="#e9ede8"/>
+    <rect x="524" y="235" width="53" height="8" rx="4" fill="#ccd8cf"/><rect x="588" y="235" width="31" height="8" rx="4" fill="#5b9a71"/>
+    <rect x="524" y="255" width="43" height="8" rx="4" fill="#ccd8cf"/><rect x="581" y="255" width="38" height="8" rx="4" fill="#d2a14b"/>
+    <path d="M524 283h94" stroke="#e9ede8" stroke-width="2" stroke-dasharray="5 6"/>
+    <path d="M528 300h17m8 0h16m8 0h16m8 0h16" stroke="#9ca9a0" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(900 32)">
+    <circle cx="60" cy="54" r="42" fill="#f4cd79"/><path d="M60 31v46m15-33c-8-12-29-8-29 4 0 18 30 5 30 20 0 13-21 17-33 6" fill="none" stroke="#75531d" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(92 82)">
+    <rect width="50" height="50" rx="15" fill="#176b49"/><path d="M25 12v26m8-19c-4-6-16-4-16 2 0 10 17 3 17 12 0 7-12 9-19 3" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <path d="M104 358h282" stroke="#176b49" stroke-width="5" stroke-linecap="round" opacity=".13"/>
+  <path d="M110 343c39-1 43-29 81-24s46-34 81-22 44-49 82-39" fill="none" stroke="#33865a" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="354" cy="258" r="9" fill="#e1af53"/>
+</svg>

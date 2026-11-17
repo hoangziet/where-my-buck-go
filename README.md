@@ -1,212 +1,123 @@
-# Where My Buck Go
+<div align="center">
+  <img src="docs/assets/hero.svg" alt="A calm, clear view of personal finances" width="900" />
 
-Local-first personal finance assistant with authentication, a preview/confirm ledger, and a Gemini-backed
-chat for text and receipt photos. Every create/edit/delete/undo is a draft until a separate, explicit
-confirm action; nothing the model proposes is written or executed directly. Attaching a receipt image
-creates a real draft with the original photo stored as evidence, same as a text message creates a draft
-with the original text as evidence — both are viewable later from the Transactions page. Chat history is
-persisted server-side (listed in the sidebar, resumable), and Q&A answers can be pinned to the dashboard.
-Gemini also has separate local smoke tests. `SRD.md` records the agreed product rules and `ROADMAP.md`
-tracks readiness work; no old SQLite
-code or data is imported.
+  # Where My Buck Go
 
-## Run with Docker Compose
+  **A personal finance assistant that keeps every decision in your hands.**
 
-Requires Docker Compose. The stack includes PostgreSQL, a one-shot migration service, the Flask
-backend, and the Next.js frontend.
+  Say what you spent, or snap a receipt. The assistant prepares a draft; nothing reaches your ledger until you confirm it.
 
-1. `cp .env.example .env` and set `AUTH_HMAC_KEY` to a random secret of at least 32 bytes.
-   Set `GEMINI_API_KEY` to enable chat and image preview.
-2. Start the app with `docker compose -f compose.local.yml up -d --build`.
-   PostgreSQL migrations run automatically before the backend starts.
-3. Open http://localhost:3100.
-4. On a fresh database, create the owner with
-   `docker compose -f compose.local.yml exec backend wmbg-bootstrap owner`.
-   Skip this if you already have an owner in the existing database volume.
+  [Live app](https://d1498jatb9ljtb.cloudfront.net) · [▶ 15-second demo](demo-video-15s/output/demo-15s.mp4) · [Deployment runbook](deploy/aws/README.md)
 
-Follow logs with `docker compose -f compose.local.yml logs -f frontend backend`.
-Stop the app with `docker compose -f compose.local.yml down`; this keeps the PostgreSQL and evidence
-volumes. Do not add `-v` if you want to keep local data. The database retains its existing local
-identity and volume so current owner accounts and sessions remain available.
+  <br />
 
-## Local backup and restore
+  <img src="docs/assets/demo-15s/demo.gif" alt="15-second product demo: log a lunch in chat, review the draft, confirm it, and watch the monthly dashboard update" width="800" />
+</div>
 
-Create a consistent, checksummed backup with `./scripts/backup-local.sh` (or pass a destination such as
-`./scripts/backup-local.sh /media/encrypted-drive/where-my-buck-go`). The command pauses the frontend and
-backend while it captures the PostgreSQL database and evidence volume, validates the archive, then starts
-the app again. Archives are written with owner-only permissions; store copies on encrypted media and keep
-`.env`/`AUTH_HMAC_KEY` separately. The default `.backups/` directory is ignored by Git.
+---
 
-For a restore, verify the sidecar with `cd /path/to/backup && sha256sum -c <archive>.tar.gz.sha256`, then
-extract the archive to a private temporary directory. Confirm the target stack and stop the frontend/backend
-before replacing its database:
+## How it works
 
-```sh
-docker compose -f compose.local.yml stop frontend backend
-docker compose -f compose.local.yml exec -T db dropdb --if-exists -U fingpt fingpt
-docker compose -f compose.local.yml exec -T db createdb -U fingpt -O fingpt fingpt
-db_container="$(docker compose -f compose.local.yml ps -q db)"
-docker cp /path/to/extracted/database.dump "$db_container:/tmp/wmbg-restore.dump"
-docker compose -f compose.local.yml exec -T -u 0 db pg_restore --exit-on-error --no-owner -U fingpt -d fingpt /tmp/wmbg-restore.dump
-docker compose -f compose.local.yml exec -T -u 0 db unlink /tmp/wmbg-restore.dump
-backend_container="$(docker compose -f compose.local.yml ps -aq backend)"
-docker cp /path/to/extracted/evidence/. "$backend_container:/data/evidence/"
-docker compose -f compose.local.yml up -d --wait frontend
-```
+<table>
+  <tr>
+    <td width="33%"><img src="docs/assets/demo-15s/draft-review.png" alt="A chat message becomes a draft preview awaiting review" /></td>
+    <td width="33%"><img src="docs/assets/demo-15s/confirmed.png" alt="The owner confirms the draft and it is saved" /></td>
+    <td width="33%"><img src="docs/assets/demo-15s/dashboard.png" alt="The monthly dashboard reflects the confirmed expense" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>1. Say it</strong><br />Describe a spend in plain language or attach one receipt image. The assistant proposes a draft.</td>
+    <td align="center"><strong>2. Review it</strong><br />Check the amount, category, and date. Confirm or discard &mdash; the model can never save on its own.</td>
+    <td align="center"><strong>3. See your month</strong><br />Confirmed entries update totals, categories, and recent transactions right away.</td>
+  </tr>
+</table>
 
-Verify health checks and owner data after restore. Database replacement is destructive; confirm the target
-and keep the source backup untouched. Rehearse restores with an isolated Compose project before relying on
-a backup for recovery.
+## Product highlights
 
-## Production deployment with Docker Compose
+<table>
+  <tr>
+    <td width="33%" align="center"><img src="docs/assets/review-before-save.svg" alt="A draft is reviewed before saving" width="240" /><br /><strong>Review before saving</strong><br />Entries stay drafts until you explicitly confirm them.</td>
+    <td width="33%" align="center"><img src="docs/assets/receipt-evidence.svg" alt="A receipt stays attached as evidence" width="240" /><br /><strong>Keep the source</strong><br />A receipt stays attached to its draft and transaction as evidence.</td>
+    <td width="33%" align="center"><img src="docs/assets/financial-overview.svg" alt="A simple monthly spending overview" width="240" /><br /><strong>Understand the month</strong><br />Spending, income, categories, and history at a glance.</td>
+  </tr>
+</table>
 
-The selected AWS target and terminal automation sequence are documented in
-[AWS Deployment Plan](AWS_DEPLOYMENT_PLAN.md). That target uses managed RDS PostgreSQL outside Docker,
-S3 evidence storage, and an AWS-provided HTTPS address. Infrastructure and release automation live in
-`infra/aws/`, `scripts/aws/`, and `compose.aws.yml`. Production is deployed at
-https://d1498jatb9ljtb.cloudfront.net; see the [AWS runbook](deploy/aws/README.md) for verified flows
-and remaining acceptance gates.
-Follow the [AWS runbook](deploy/aws/README.md). The legacy `compose.prod.yml` below uses containerized
-PostgreSQL and R2 and is not the AWS deployment profile.
+### Core capabilities
 
-Production deployment uses `compose.prod.yml` and targets a single host behind a TLS reverse proxy
-(such as Caddy or Nginx). Production requires an explicit, random `POSTGRES_PASSWORD`, `AUTH_HMAC_KEY`,
-and Cloudflare R2 credentials for evidence storage:
+- Record income and expenses through chat or a single receipt image.
+- Ask owner-scoped questions about totals over supported date ranges.
+- Preview and confirm creates, edits, deletes, and undo operations.
+- Browse evidence, reports, saved conversations, and filtered CSV exports.
+- Install it as a standalone PWA on iOS, or use it in any browser.
+- Run locally with Docker Compose or use the deployed AWS application.
+
+## Run locally
+
+### Requirements
+
+- Docker Engine with Docker Compose
+- A Gemini API key for AI chat and receipt extraction (optional for the rest of the app)
+
+### Start the stack
 
 ```sh
-# Required environment variables in .env or systemd unit:
-POSTGRES_PASSWORD=your-secure-postgres-password
-AUTH_HMAC_KEY=your-random-hmac-key-at-least-32-bytes
-R2_ACCOUNT_ID=your-cloudflare-account-id
-R2_ACCESS_KEY_ID=your-r2-access-key-id
-R2_SECRET_ACCESS_KEY=your-r2-secret-access-key
-R2_BUCKET_NAME=your-r2-bucket-name
-GEMINI_API_KEY=your-gemini-api-key # optional
+cp .env.example .env
+# Set AUTH_HMAC_KEY to a random secret of at least 32 bytes.
+# Set GEMINI_API_KEY to enable AI features.
+docker compose -f compose.local.yml up -d --build
+docker compose -f compose.local.yml exec backend wmbg-bootstrap owner
 ```
 
-Leave `R2_ENDPOINT_URL` unset for Cloudflare R2. It is an optional override used only with an isolated
-S3-compatible test server.
+Open [http://localhost:3100](http://localhost:3100). On later starts, omit the bootstrap command if an owner already exists. Stop the services with `docker compose -f compose.local.yml down`; this preserves local database and evidence volumes. Avoid `-v` unless you intend to delete that data.
 
-The database password is passed as a separate component and SQLAlchemy builds the connection URL with
-proper escaping, so generated passwords may contain reserved URL characters.
+For host-based development, Python and frontend commands are documented in [AGENTS.md](AGENTS.md). The current AWS architecture, provisioning and release process are in [AWS_DEPLOYMENT_PLAN.md](AWS_DEPLOYMENT_PLAN.md) and the [AWS operations runbook](deploy/aws/README.md).
 
-Start the production stack with:
+## Architecture
 
-```sh
-docker compose -f compose.prod.yml up -d --build
+```text
+Next.js web app ── same-origin API proxy ── Flask API ── PostgreSQL
+                                              ├── Gemini (structured extraction and chat)
+                                              └── private evidence storage
 ```
 
-The production stack:
-- Uses `APP_ENV=production` with secure cookies (`__Host-` prefix, `HttpOnly`, `SameSite=Strict`, `Secure`), HSTS headers, and `ProxyFix` middleware.
-- Stores evidence in private Cloudflare R2 instead of the local filesystem.
-- Sets memory limits (512MB per container), log rotation (`json-file` with 10MB x 3 files max), and `restart: unless-stopped`.
-- Binds frontend only to `127.0.0.1:3000` for reverse proxy termination. Backend and database ports are not published to the host.
-- Migrates the database automatically before backend launch via a one-shot `migrate` service.
+- **Frontend:** Next.js, React, TypeScript.
+- **Backend:** Python, Flask, SQLAlchemy, Alembic, PostgreSQL.
+- **AI:** Gemini structured function calls; server-side validation controls all proposed actions.
+- **Local evidence:** private filesystem volume. **Production evidence:** private AWS S3 bucket.
+- **Production:** AWS EC2 and CloudFront with managed RDS PostgreSQL and Terraform-managed infrastructure.
 
-On initial production launch, create the owner account with:
-`docker compose -f compose.prod.yml exec backend wmbg-bootstrap owner`
+More on the product and its safety rules: [SRD](SRD.md). Contributor conventions: [AGENTS.md](AGENTS.md).
 
-Deploy only after local acceptance and explicit owner approval.
+## Safety model
 
-### Production backup and restore
-
-With the production stack healthy and the R2 token configured, create a consistent PostgreSQL plus R2
-evidence backup with `./scripts/backup-production.sh /path/to/encrypted/backups`. The script pauses frontend
-and backend writes, exports and checksum-verifies each database-referenced R2 object, validates the database
-dump/archive, writes an owner-only archive and SHA-256 sidecar, then restarts the app. Keep the archive on
-encrypted off-host storage; keep `.env` and secrets separately.
-
-To replace the production database with a backup, run
-`./scripts/restore-production.sh --confirm-replace-production-data /path/to/backup.tar.gz`. The script
-checks the archive checksum and contents, creates a fresh pre-restore backup, restores PostgreSQL, restores
-the matching R2 objects, then checks service health and `/login`. If recovery fails after the database is
-replaced, it leaves the app stopped and retains the pre-restore backup for operator recovery. Rehearse this
-on an isolated production Compose project before relying on it; a live Cloudflare R2 rehearsal still needs
-the owner's bucket credentials.
-
-These backup commands run on demand. The repository does not install a recurring timer or copy archives to
-off-host storage. Before production launch, choose the recovery-point target and retention period, schedule
-`backup-production.sh` on the host, and copy each archive together with its `.sha256` sidecar to encrypted
-off-host storage. Monitor failures and rehearse restoring a scheduled backup.
-
-## Run services on the host
-
-For host-based development, use Python 3.10+, Node 20+, and Docker. Start only PostgreSQL with
-`docker compose -f compose.local.yml up -d db`, then install the backend with
-`uv venv .venv && uv pip install --python .venv/bin/python -e './backend[dev]'`.
-From `backend`, run migrations with
-`DATABASE_URL=postgresql+psycopg://fingpt:local-only-change-me@localhost:55432/fingpt ../.venv/bin/alembic upgrade head`,
-then load `.env` with `set -a; source ../.env; set +a` and start Flask with
-`../.venv/bin/flask --app where_my_buck_go.api.app:create_app run --port 5000`.
-In another shell, run `cd frontend && npm ci && npm run dev -- -p 3100` and visit
-http://localhost:3100.
-Local testing takes priority; production deployment to the selected host starts only after the owner approves
-the local app and deployment target.
-The Gemini adapter can be verified independently without writing financial data. Set `GEMINI_API_KEY`
-in `.env`, load `.env` into the shell, then run `./.venv/bin/wmbg-gemini-smoke` from the repository root.
-The default model is `gemini-3.1-flash-lite` (override with `GEMINI_MODEL`). The command makes one
-request with harmless sample text and validates the forced function call.
-With `GEMINI_API_KEY` set, Gemini routes web text chat to owner-scoped read-only totals, draft income/expense
-proposals, or an edit/delete/undo request matched against the owner's own transactions (an explicit
-selection step if more than one matches). It cannot confirm transactions or execute SQL. Chat history is
-bounded to eight turns for the model but persisted in full server-side per conversation.
-To test a single image locally without saving it, pass a private PNG/JPEG path that is not committed to
-the repository, for example `./.venv/bin/wmbg-gemini-image-smoke /path/to/private-receipt.png`.
-Only PNG/JPEG files up to 4 MB are sent to Gemini. The CLI is a read-only extraction check and never writes
-anything; the web `/api/chat/image-intake` endpoint performs the same extraction but creates a real,
-confirmable draft with the original image stored as evidence.
-
-## Ledger API (local)
-
-All ledger writes require an authenticated session, its `X-CSRF-Token` header, a unique UUID
-`Idempotency-Key` per logical operation, and `expectedVersion` in JSON. Reuse the same key when
-retrying that operation after a timeout or lost response. Creating a proposal uses version `0`;
-confirming or editing a proposal uses its previewed version. Reusing a key with a different body
-returns `409`; repeating an identical request returns the original response. The model cannot call
-the confirm route. `POST /api/proposals` creates a draft; `PATCH /api/proposals/<id>` completes or
-replaces one; `POST /api/proposals/<id>/confirm` is a distinct, explicit action. For existing
-transactions, `POST /api/proposals/changes` with `operation: edit|delete|undo`, `targetId` and
-the transaction's `expectedVersion` creates a separate preview. `POST /api/proposals/<id>/discard`
-marks an open draft discarded instead of leaving it open forever; it is scoped, idempotent and
-version-checked the same as confirm. `GET /api/proposals/<id>` and
-`GET /api/transactions/<id>` include owner-scoped `evidenceIds`; fetch original text via
-`GET /api/evidence/<id>`. `GET /api/proposals` lists up to 200 open owner drafts, including after a
-page reload. Every proposal requires original `evidenceText`. Missing date stays a
-draft; a missing time receives a marked default. Local evidence lives in private `.local-evidence/`.
-Production uses the S3-compatible Cloudflare R2 adapter. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
-`R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME` in the deployment environment; startup fails if any are
-missing. Use a private bucket and a token scoped to that bucket. Evidence objects have UUID keys,
-retain database SHA-256 verification, and are never exposed through public bucket access. The adapter's
-contract is covered by isolated tests; a live R2 upload/restore rehearsal still requires deployment
-credentials and is not represented as verified here.
-
-`POST /api/chat/messages` accepts `{ "text": "...", "history": [], "expectedVersion": 0, "chatId": "..." }`
-(`chatId` optional; a new conversation is created and returned when omitted) with the same session,
-CSRF, and UUID idempotency header. Read-only totals support a single day, this/last month, or a
-validated custom range up to 366 days. It returns a read-only answer, draft previews for extracted
-items, a ready-to-confirm edit/delete/undo draft when exactly one transaction matches, or a list of
-candidate transactions to pick from when more than one matches. Every response includes `debugTrace`
-(the routing steps and executed SQL templates, values hidden) for the "Steps & SQL" panel in the chat
-UI, and `chatId` for the conversation it was appended to. Retry a failed request with its original
-key; successful replays return the same previews. `POST /api/chat/image-intake` accepts multipart
-`image` (optional `caption` text) with CSRF and an idempotency key, and creates a real draft the same
-way text intake does, with the original image stored as evidence.
-`GET /api/chats` lists the owner's conversations; `GET /api/chats/<id>/messages` returns one
-conversation's full history. `POST /api/chat/pins` / `GET /api/chat/pins` / `DELETE
-/api/chat/pins/<id>` manage dashboard-pinned Q&A ranges, each re-running the same owner-scoped
-aggregate on every read — never arbitrary SQL.
-`POST /api/auth/change-password` verifies the current password before setting a new one and revokes
-every active session, the same as the CLI reset.
+- No public registration; the owner account is bootstrapped by an operator.
+- Model output is untrusted and cannot execute SQL or confirm a ledger change.
+- Mutating requests require authentication, CSRF protection, idempotency keys, and version checks.
+- Receipt and chat content are private evidence; never commit real financial records or credentials.
 
 ## Checks
 
-`./.venv/bin/pytest backend/tests -q`, `./.venv/bin/ruff check backend`,
-`./.venv/bin/mypy --config-file backend/pyproject.toml backend/src/where_my_buck_go`, and from `frontend/`, `npm run lint`, `npm run build`,
-and `npm run test:e2e` (requires Playwright Chromium; the test command starts the production server).
+```sh
+./.venv/bin/pytest backend/tests -q
+./.venv/bin/ruff check backend
+./.venv/bin/mypy --config-file backend/pyproject.toml backend/src/where_my_buck_go
+cd frontend && npm ci && npm run lint && npm run build
+```
 
-Python source lives at `backend/src/where_my_buck_go/`. Existing local PostgreSQL databases named
-`fingpt` remain unchanged so the current owner and session history are preserved. After the rename,
-sign in again: the app now uses `wmbg_*` cookie names.
+PostgreSQL integration tests require a disposable `TEST_DATABASE_URL`. Browser tests use `npm run test:e2e` from `frontend/` and Playwright Chromium.
 
-For an integration check against a disposable PostgreSQL database, run
-`TEST_DATABASE_URL=postgresql+psycopg://... ./.venv/bin/pytest backend/tests -q`.
+## Demo video
+
+The [15-second demo](demo-video-15s/output/demo-15s.mp4) is authored as code with [HyperFrames](https://github.com/heygen-com/hyperframes) in [`demo-video-15s/`](demo-video-15s/). It uses synthetic data only; interface elements are rebuilt from the frontend source, not recorded from a real account.
+
+To edit or re-render, install Node.js 22+ and FFmpeg, then run:
+
+```sh
+cd demo-video-15s
+npm run dev                             # live preview in the browser
+npm run check                           # lint, layout, motion, and contrast checks
+npx hyperframes render -o output/demo-15s.mp4
+```
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
