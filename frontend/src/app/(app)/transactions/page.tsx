@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { Download, Plus, Trash2, Pencil, Eye, ChevronDown, SlidersHorizontal } from "lucide-react";
-import { appLocalISODate, formatVND } from "@/lib/format";
+import { appLocalISODate, appLocalTime, formatVND } from "@/lib/format";
 import * as api from "@/lib/api";
-import type { Category, TransactionDto } from "@/lib/api";
+import type { TransactionDto } from "@/lib/api";
 import { ApiError, CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
-import { EditModal } from "@/components/transactions/EditModal";
+import { TransactionFormModal, type TransactionFormValues } from "@/components/transactions/TransactionFormModal";
 import { EvidenceModal } from "@/components/transactions/EvidenceModal";
 import { ClearFiltersButton, RangeFilters, SearchInput, SortableHeader } from "@/components/transactions/TableControls";
 import { TransactionChangePreview, type PendingChange } from "@/components/transactions/TransactionChangePreview";
@@ -41,6 +40,7 @@ export default function TransactionsPage() {
   const [lastDeleted, setLastDeleted] = useState<{ tx: TransactionDto; deletedVersion: number } | null>(null);
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TransactionDto | null>(null);
+  const [adding, setAdding] = useState(false);
   const [pendingChange, setPendingChange] = useState<PendingChange | null>(null);
   const [viewingEvidenceFor, setViewingEvidenceFor] = useState<TransactionDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -113,10 +113,16 @@ export default function TransactionsPage() {
     }
   }
 
-  async function handleEditSave(fields: {
-    amount: string; direction: "income" | "expense"; description: string; category: Category;
-    occurredDate: string; occurredTime: string;
-  }) {
+  async function handleCreate(values: TransactionFormValues) {
+    // Submitting the form is the owner's explicit confirmation, so the draft is confirmed at once.
+    // Errors propagate to the form, which keeps the entered values and shows the message.
+    const draft = await api.createTransactionDraft(values, `Added "${values.description}" from Transactions page`);
+    const { transaction } = await api.confirmProposal(draft.id, draft.version, crypto.randomUUID());
+    setItems((prev) => [transaction, ...prev]);
+    setAdding(false);
+  }
+
+  async function handleEditSave(fields: TransactionFormValues) {
     if (!editing) return;
     setError(null);
     try {
@@ -239,13 +245,14 @@ export default function TransactionsPage() {
             <Download size={16} />
             Export CSV
           </button>
-          <Link
-            href="/chat"
-            className="flex items-center gap-2 bg-accent text-white no-underline border-0 rounded-[10px] px-4 min-h-11 text-sm font-semibold cursor-pointer transition-colors duration-150 hover:bg-accent-strong"
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="flex items-center gap-2 bg-accent text-white border-0 rounded-[10px] px-4 min-h-11 text-sm font-semibold cursor-pointer transition-colors duration-150 hover:bg-accent-strong"
           >
             <Plus size={16} strokeWidth={2.2} />
             Add transaction
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -253,13 +260,14 @@ export default function TransactionsPage() {
       <div className="lg:hidden flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h1 className="m-0 font-display font-semibold text-2xl tracking-tight">Transactions</h1>
-          <Link
-            href="/chat"
+          <button
+            type="button"
             aria-label="Add transaction"
-            className="w-11 h-11 rounded-xl border border-border-input bg-surface flex items-center justify-center no-underline text-ink cursor-pointer transition-colors duration-150 active:bg-[#F4F2EC]"
+            onClick={() => setAdding(true)}
+            className="w-11 h-11 rounded-xl border border-border-input bg-surface flex items-center justify-center text-ink cursor-pointer transition-colors duration-150 active:bg-[#F4F2EC]"
           >
             <Plus size={18} strokeWidth={2.2} />
-          </Link>
+          </button>
         </div>
         <SearchInput id="m-tx-search" query={query} onChange={setQuery} placeholder="Search" />
         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -534,7 +542,28 @@ export default function TransactionsPage() {
       )}
 
       {editing && (
-        <EditModal transaction={editing} onCancel={() => setEditing(null)} onSave={handleEditSave} />
+        <TransactionFormModal
+          title="Edit transaction"
+          submitLabel="Review changes"
+          savingLabel="Preparing preview…"
+          initial={editing}
+          onCancel={() => setEditing(null)}
+          onSave={handleEditSave}
+        />
+      )}
+      {adding && (
+        <TransactionFormModal
+          title="Add transaction"
+          submitLabel="Save transaction"
+          savingLabel="Saving…"
+          initial={{
+            amount: "", direction: "expense", description: "", category: "food_drink",
+            occurredDate: appLocalISODate(new Date()), occurredTime: appLocalTime(new Date()),
+          }}
+          maxDate={appLocalISODate(new Date())}
+          onCancel={() => setAdding(false)}
+          onSave={handleCreate}
+        />
       )}
 
       {pendingChange && (

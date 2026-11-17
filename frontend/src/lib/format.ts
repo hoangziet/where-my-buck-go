@@ -25,6 +25,10 @@ export function appLocalISODate(date: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIMEZONE }).format(date);
 }
 
+export function appLocalTime(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: APP_TIMEZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date);
+}
+
 export function appLocalMonthYear(date: Date): string {
   return new Intl.DateTimeFormat("en-US", { timeZone: APP_TIMEZONE, month: "long", year: "numeric" }).format(date);
 }
