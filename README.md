@@ -5,30 +5,39 @@
 
   **A personal finance assistant that keeps every decision in your hands.**
 
-  Capture spending in plain language or with a receipt. Review the proposed details, then confirm what belongs in your ledger.
+  Say what you spent, or snap a receipt. The assistant prepares a draft; nothing reaches your ledger until you confirm it.
 
-  [Live app](https://d1498jatb9ljtb.cloudfront.net) · [▶ Watch the 32-second product demo](demo-video/output/main.mp4) · [Deployment runbook](deploy/aws/README.md)
+  [Live app](https://d1498jatb9ljtb.cloudfront.net) · [▶ 15-second demo](demo-video-15s/output/demo-15s.mp4) · [Deployment runbook](deploy/aws/README.md)
+
+  <br />
+
+  <img src="docs/assets/demo-15s/demo.gif" alt="15-second product demo: log a lunch in chat, review the draft, confirm it, and watch the monthly dashboard update" width="800" />
 </div>
 
 ---
 
-Where My Buck Go helps one person record and understand everyday finances. It combines conversational entry with a reliable ledger: the assistant can prepare a transaction draft, but only the owner can confirm it.
+## How it works
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/assets/demo-15s/draft-review.png" alt="A chat message becomes a draft preview awaiting review" /></td>
+    <td width="33%"><img src="docs/assets/demo-15s/confirmed.png" alt="The owner confirms the draft and it is saved" /></td>
+    <td width="33%"><img src="docs/assets/demo-15s/dashboard.png" alt="The monthly dashboard reflects the confirmed expense" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>1. Say it</strong><br />Describe a spend in plain language or attach one receipt image. The assistant proposes a draft.</td>
+    <td align="center"><strong>2. Review it</strong><br />Check the amount, category, and date. Confirm or discard &mdash; the model can never save on its own.</td>
+    <td align="center"><strong>3. See your month</strong><br />Confirmed entries update totals, categories, and recent transactions right away.</td>
+  </tr>
+</table>
 
 ## Product highlights
 
 <table>
   <tr>
     <td width="33%" align="center"><img src="docs/assets/review-before-save.svg" alt="A draft is reviewed before saving" width="240" /><br /><strong>Review before saving</strong><br />Entries stay drafts until you explicitly confirm them.</td>
-    <td width="33%" align="center"><img src="docs/assets/receipt-evidence.svg" alt="A receipt stays attached as evidence" width="240" /><br /><strong>Keep the source</strong><br />Attach one receipt image and keep it with its draft and transaction.</td>
-    <td width="33%" align="center"><img src="docs/assets/financial-overview.svg" alt="A simple monthly spending overview" width="240" /><br /><strong>Understand the month</strong><br />Review spending, income, categories, and transaction history.</td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <td width="33%"><img src="docs/assets/demo-frames/frame-01-at-7.5s.png" alt="Chat proposes draft transactions for review" /></td>
-    <td width="33%"><img src="docs/assets/demo-frames/frame-02-at-12.5s.png" alt="A proposed expense awaits owner confirmation" /></td>
-    <td width="33%"><img src="docs/assets/demo-frames/frame-03-at-18s.png" alt="Monthly income and spending overview" /></td>
+    <td width="33%" align="center"><img src="docs/assets/receipt-evidence.svg" alt="A receipt stays attached as evidence" width="240" /><br /><strong>Keep the source</strong><br />A receipt stays attached to its draft and transaction as evidence.</td>
+    <td width="33%" align="center"><img src="docs/assets/financial-overview.svg" alt="A simple monthly spending overview" width="240" /><br /><strong>Understand the month</strong><br />Spending, income, categories, and history at a glance.</td>
   </tr>
 </table>
 
@@ -38,6 +47,7 @@ Where My Buck Go helps one person record and understand everyday finances. It co
 - Ask owner-scoped questions about totals over supported date ranges.
 - Preview and confirm creates, edits, deletes, and undo operations.
 - Browse evidence, reports, saved conversations, and filtered CSV exports.
+- Install it as a standalone PWA on iOS, or use it in any browser.
 - Run locally with Docker Compose or use the deployed AWS application.
 
 ## Run locally
@@ -97,15 +107,21 @@ PostgreSQL integration tests require a disposable `TEST_DATABASE_URL`. Browser t
 
 ## Demo video
 
-The synthetic-data demo is authored with [HyperFrames](https://github.com/heygen-com/hyperframes) in [`demo-video/`](demo-video/). To render it locally, install Node.js 22+ and FFmpeg, then run:
+The demos are authored as code with [HyperFrames](https://github.com/heygen-com/hyperframes) and use synthetic data only; interface elements are rebuilt from the frontend source, not recorded from a real account.
+
+| Project | Length | Output |
+| --- | --- | --- |
+| [`demo-video-15s/`](demo-video-15s/) | 15 s | [`output/demo-15s.mp4`](demo-video-15s/output/demo-15s.mp4) |
+| [`demo-video/`](demo-video/) | 32 s | [`output/main.mp4`](demo-video/output/main.mp4) |
+
+To edit or re-render, install Node.js 22+ and FFmpeg, then run:
 
 ```sh
-cd demo-video
-npx hyperframes check
-npx hyperframes render -o output/main.mp4
+cd demo-video-15s
+npm run dev                             # live preview in the browser
+npm run check                           # lint, layout, motion, and contrast checks
+npx hyperframes render -o output/demo-15s.mp4
 ```
-
-The video uses illustrative interface elements and synthetic transactions; it does not contain a recording of a real account.
 
 ## License
 
