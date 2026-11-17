@@ -21,7 +21,7 @@ jobs:
           python-version: '3.12'
       - run: pip install ruff boto3 pytest
       - run: ruff check scripts/aws deploy/aws --select F,E9
-      - run: python -m pytest tests/test_aws_automation.py -q
+      - run: python -m pytest deploy/aws/tests -q
       - name: Validate external-database Compose profile
         run: |
           mkdir -p /tmp/wmbg-ci

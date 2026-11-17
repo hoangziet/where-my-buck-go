@@ -16,7 +16,7 @@ The web app is the first delivery channel. Telegram is a possible later mileston
 
 The selected production target is AWS: EC2 and CloudFront for the application, managed RDS PostgreSQL outside
 Docker, private S3 evidence storage, and an AWS-provided HTTPS address without a purchased domain.
-[AWS Deployment Plan](AWS_DEPLOYMENT_PLAN.md) defines Terraform, AWS CLI, and GitHub CLI automation,
+[AWS Deployment Plan](../deploy/aws/DEPLOYMENT_PLAN.md) defines Terraform, AWS CLI, and GitHub CLI automation,
 cost assumptions, network gates, and release acceptance. Production is deployed at
 https://d1498jatb9ljtb.cloudfront.net. Authenticated API and browser login/logout, report reads,
 secure CSRF cookie handling, a discarded synthetic draft, backup hashes, and a separate-database

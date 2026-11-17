@@ -12,7 +12,11 @@ Think and write repository content in English; reply to users in Vietnamese. Kee
 
 - `backend/src/where_my_buck_go/` contains the Flask application, organized into `api/`, `domain/`, `services/`, and `adapters/`.
 - `backend/migrations/versions/` contains Alembic migrations; `backend/tests/` contains pytest tests.
-- `frontend/src/app/` contains Next.js routes; shared components and API helpers live in `frontend/src/components/` and `frontend/src/lib/`.
+- `frontend/src/app/` contains Next.js routes. Route pages stay thin: feature components live in `frontend/src/components/<feature>/` (for example `chat/`, `transactions/`), shared components in `frontend/src/components/`, and API, formatting and hooks in `frontend/src/lib/`. Playwright tests are in `frontend/e2e/`.
+- `infra/aws/` holds Terraform; `deploy/aws/` holds the runtime, proxy config, runbook (`README.md`), deployment plan and its tests (`deploy/aws/tests/`); `scripts/` holds AWS automation and backup/restore scripts.
+- `compose.*.yml` at the root define the local, production and CI stacks.
+- `docs/` holds the product requirements (`SRD.md`) and README assets; `GLOSSARY.md` stays at the root for the domain-modeling skill.
+- `demo/` is the HyperFrames source for the product demo video.
 - `README.md` documents local setup.
 
 ## Build, Test, and Development
