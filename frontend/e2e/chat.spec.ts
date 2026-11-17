@@ -289,8 +289,13 @@ test("chat sidebar lists previous chats and toggles collapse", async ({ page }) 
   await expect(sidebar.getByText("Cà phê sáng nay")).toBeVisible();
   await expect(sidebar.getByText("Tiền phòng trọ")).toBeVisible();
 
+  // The sidebar has no duplicate brand or toggle; the chat header owns the toggle.
+  await expect(sidebar.getByText("Where My Buck Go")).toHaveCount(0);
+  await expect(sidebar.getByRole("button", { name: "Collapse sidebar" })).toHaveCount(0);
+  await expect(page.getByRole("main").getByText("AI Chat", { exact: true })).toHaveCount(0);
+
   // Test collapsing sidebar
-  await sidebar.getByRole("button", { name: "Collapse sidebar" }).click();
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect(sidebar).toHaveClass(/lg:w-0/);
 
   // Test expanding sidebar
@@ -381,4 +386,24 @@ test("a follow-up message sends pending drafts and replaces the revised card", a
   expect(history[1].text).toContain(`[Draft ${draft.id}] ăn hủ tiếu`);
   await expect(page.getByText("Draft preview")).toHaveCount(1);
   await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2026-11-12");
+});
+
+test("starter questions show only on a new, empty chat and send when picked", async ({ page }) => {
+  const sent: string[] = [];
+  await openChat(page);
+  await page.route("**/api/chat/messages", async (route) => {
+    sent.push(route.request().postDataJSON().text);
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({
+      kind: "qa", message: "Tuần này bạn đã chi 450.000 ₫.", start: "2026-11-16", end: "2026-11-22",
+      totals: { income: "0", expense: "450000" },
+    }) });
+  });
+
+  const starters = page.getByRole("navigation", { name: "Suggested questions" });
+  await expect(starters.getByRole("button")).toHaveCount(4);
+  await starters.getByRole("button", { name: "Tuần này tôi đã chi bao nhiêu?" }).click();
+
+  await expect(page.getByText("Tuần này bạn đã chi 450.000 ₫.")).toBeVisible();
+  expect(sent).toEqual(["Tuần này tôi đã chi bao nhiêu?"]);
+  await expect(starters).toHaveCount(0);
 });
