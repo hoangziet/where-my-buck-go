@@ -75,18 +75,18 @@ export function RefreshRangeDataButton({ start, end }: { start: string; end: str
         className="flex items-center gap-2 border rounded-[10px] px-3.5 min-h-9 text-[13px] font-medium bg-surface text-ink border-border-input hover:bg-[#F4F2EC] cursor-pointer transition-colors duration-150 disabled:opacity-50"
       >
         <RotateCw size={14} className={loading ? "animate-spin text-accent" : "text-muted"} />
-        <span>{loading ? "Đang tính toán…" : "Làm mới số liệu"}</span>
+        <span>{loading ? "Calculating…" : "Refresh figures"}</span>
       </button>
       {liveTotals && (
         <div className="p-3 rounded-xl border border-accent-soft-border bg-[#F4F8F5] text-xs flex flex-col gap-1.5 animate-fadeIn">
           <div className="flex items-center justify-between text-muted text-[11px]">
-            <span className="font-medium text-accent-strong">Số liệu mới nhất ({start} → {end})</span>
-            <span>Cập nhật lúc {liveTotals.refreshedAt}</span>
+            <span className="font-medium text-accent-strong">Latest figures ({start} → {end})</span>
+            <span>Updated at {liveTotals.refreshedAt}</span>
           </div>
           <div className="flex items-center gap-4 font-mono text-[13px]">
             <span className="text-[#1E7E34] font-medium">+Thu: {formatVND(liveTotals.income)}</span>
             <span className="text-ink font-medium">−Chi: {formatVND(liveTotals.expense)}</span>
-            <span className="text-muted text-xs">({liveTotals.count} giao dịch)</span>
+            <span className="text-muted text-xs">({liveTotals.count} transactions)</span>
           </div>
         </div>
       )}

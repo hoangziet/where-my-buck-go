@@ -4,10 +4,10 @@ import { CornerDownRight } from "lucide-react";
 
 // Shown only on an empty, new conversation to show what the assistant can do; picking one sends it.
 const STARTER_QUESTIONS = [
-  "Tuần này tôi đã chi bao nhiêu?",
-  "Tháng này tôi chi nhiều nhất cho danh mục nào?",
-  "So với tháng trước, tháng này tôi chi nhiều hơn hay ít hơn?",
-  "Ăn trưa 50k",
+  "How much did I spend this week?",
+  "Which category cost me the most this month?",
+  "Did I spend more this month than last month?",
+  "Lunch 50k",
 ];
 
 export function StarterQuestions({ onAsk }: { onAsk: (question: string) => void }) {

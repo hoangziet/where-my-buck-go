@@ -273,7 +273,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
         role: "assistant", kind: "image_intake", text: res.message, proposal: res.proposal,
         debugTrace: res.debugTrace,
       }]);
-      pushHistory(caption || "Hình ảnh hóa đơn", res.message);
+      pushHistory(caption || "Receipt image", res.message);
       retryRequest.current = null;
     } catch (err) {
       retryRequest.current = request;
@@ -350,7 +350,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
       );
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", kind: "change", text: `Bản nháp ${operation} đã sẵn sàng; cần xác nhận riêng.`, proposal },
+        { role: "assistant", kind: "change", text: `The ${operation} draft is ready for your review.`, proposal },
       ]);
     } catch (err) {
       const text = err instanceof Error ? err.message : "Could not create that proposal";

@@ -17,7 +17,7 @@ export default function AppGroupLayout({ children }: { children: React.ReactNode
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center bg-bg gap-3">
         <div className="w-9 h-9 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-        <span className="text-xs text-muted font-medium tracking-wide">Đang tải dữ liệu...</span>
+        <span className="text-xs text-muted font-medium tracking-wide">Loading your data...</span>
       </div>
     );
   }
