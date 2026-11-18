@@ -163,3 +163,17 @@ test("dashboard shows a useless fact instead of the AI shortcuts and can fetch a
   await card.getByRole("button", { name: "Show another fact" }).click();
   await expect(card).toContainText("Honey never spoils.");
 });
+
+test("the brand link opens the landing page, which plays the product demo video", async ({ page }) => {
+  await page.route("**/api/auth/me", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ username: "owner" }) }));
+  await page.route("**/api/transactions", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [] }) }));
+  await page.goto("/transactions");
+  await page.getByRole("banner").getByRole("link", { name: "Where My Buck Go" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  const video = page.locator("video");
+  await expect(video).toHaveAttribute("poster", "/demo-poster.jpg");
+  await expect(video.locator("source")).toHaveAttribute("src", "/demo.mp4");
+  const response = await page.request.get("/demo.mp4");
+  expect(response.ok()).toBe(true);
+  expect(response.headers()["content-type"]).toContain("video/mp4");
+});

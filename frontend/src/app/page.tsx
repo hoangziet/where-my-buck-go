@@ -84,45 +84,19 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="bg-surface border border-border rounded-[22px] p-6 flex flex-col gap-4 shadow-[0_1px_2px_rgba(22,32,26,0.04),0_24px_48px_-24px_rgba(22,32,26,0.14)]">
-          <div className="flex items-center justify-between pb-3.5 border-b border-border-row">
-            <span className="font-semibold text-sm">AI Chat</span>
-            <span className="text-xs text-muted">Today, 08:12</span>
-          </div>
-          <div className="self-end max-w-[80%] bg-ink text-white px-4 py-3 rounded-[16px_16px_4px_16px] text-[15px]">
-            pho 45k this morning, grab to work 32k
-          </div>
-          <div className="flex flex-col gap-2.5">
-            <span className="text-sm text-ink-3">Found 2 expenses. Review before I save them:</span>
-            <div className="border border-border rounded-[14px] overflow-hidden">
-              <div className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border-row">
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-medium text-[15px]">Phở breakfast</span>
-                  <span className="text-[13px] text-muted">Food &amp; Drink · Today 07:30</span>
-                </div>
-                <span className="font-mono font-medium text-[15px]">−45.000 ₫</span>
-              </div>
-              <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-medium text-[15px]">Grab ride to work</span>
-                  <span className="text-[13px] text-muted">Transport · Today 08:05</span>
-                </div>
-                <span className="font-mono font-medium text-[15px]">−32.000 ₫</span>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="font-semibold text-sm bg-accent text-white border-0 rounded-[10px] px-4 min-h-11 cursor-pointer transition-colors duration-150 hover:bg-accent-strong">
-                Confirm both
-              </button>
-              <button type="button" className="font-medium text-sm bg-surface text-ink border border-border-input rounded-[10px] px-4 min-h-11 cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC]">
-                Edit
-              </button>
-              <button type="button" className="font-medium text-sm bg-transparent text-ink-3 border-0 rounded-[10px] px-3 min-h-11 cursor-pointer transition-colors duration-150 hover:bg-[#F4F2EC] hover:text-ink">
-                Discard
-              </button>
-            </div>
-          </div>
-        </div>
+        <figure className="m-0 flex flex-col gap-3">
+          <video
+            controls
+            playsInline
+            preload="metadata"
+            poster="/demo-poster.jpg"
+            aria-label="15-second product demo: log a lunch in chat, review and confirm the draft, then see the month update"
+            className="w-full aspect-video rounded-[22px] border border-border bg-surface shadow-[0_1px_2px_rgba(22,32,26,0.04),0_24px_48px_-24px_rgba(22,32,26,0.14)]"
+          >
+            <source src="/demo.mp4" type="video/mp4" />
+          </video>
+          <figcaption className="text-sm text-muted">15-second demo · synthetic data, with sound</figcaption>
+        </figure>
       </section>
 
       <section id="features" className="bg-surface border-y border-border-row">

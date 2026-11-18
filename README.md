@@ -1,22 +1,20 @@
 <div align="center">
-  <img src="docs/assets/hero.svg" alt="A calm, clear view of personal finances" width="900" />
 
   # Where My Buck Go
 
   **A personal finance assistant that keeps every decision in your hands.**
 
-  Say what you spent, or snap a receipt. The assistant prepares a draft; nothing reaches your ledger until you confirm it.
+  Say what you spent, snap a receipt, or just ask *"where did my money go this week?"* in plain language.
+  The assistant drafts entries for you to confirm and answers questions from your own ledger, showing the exact SQL it ran.
 
-  [Live app](https://d1498jatb9ljtb.cloudfront.net) · [▶ 15-second demo](demo/output/demo-15s.mp4) · [Deployment runbook](deploy/aws/README.md)
-
-  <br />
-
-  <img src="docs/assets/demo-15s/demo.gif" alt="15-second product demo: log a lunch in chat, review the draft, confirm it, and watch the monthly dashboard update" width="800" />
+  [Live app](https://d1498jatb9ljtb.cloudfront.net) · [Deployment runbook](deploy/aws/README.md)
 </div>
 
 ---
 
 ## How it works
+
+### Log it
 
 <table>
   <tr>
@@ -31,20 +29,33 @@
   </tr>
 </table>
 
-## Product highlights
+### Ask it
+
+Ask about your money the way you would ask a friend, in Vietnamese or English: *"Hai ngày qua tôi đã chi bao nhiêu, cho mấy việc gì?"*, *"How much did I spend on food this month?"*, *"Which category did I spend the most on last month?"*
 
 <table>
   <tr>
-    <td width="33%" align="center"><img src="docs/assets/review-before-save.svg" alt="A draft is reviewed before saving" width="240" /><br /><strong>Review before saving</strong><br />Entries stay drafts until you explicitly confirm them.</td>
-    <td width="33%" align="center"><img src="docs/assets/receipt-evidence.svg" alt="A receipt stays attached as evidence" width="240" /><br /><strong>Keep the source</strong><br />A receipt stays attached to its draft and transaction as evidence.</td>
-    <td width="33%" align="center"><img src="docs/assets/financial-overview.svg" alt="A simple monthly spending overview" width="240" /><br /><strong>Understand the month</strong><br />Spending, income, categories, and history at a glance.</td>
+    <td width="52%"><img src="docs/assets/demo-15s/ask-answer.png" alt="A plain-language question answered with a total and a table of the matching transactions" /></td>
+    <td width="48%"><img src="docs/assets/demo-15s/ask-sql.png" alt="The Steps and SQL panel showing the exact parameterized query that produced the answer" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>A real answer, not a guess</strong><br />Totals, the category breakdown and a table of the matching transactions, ready to pin to your dashboard.</td>
+    <td align="center"><strong>See exactly what ran</strong><br />Open <em>Steps &amp; SQL</em> to inspect every query and its parameters.</td>
   </tr>
 </table>
+
+Gemini only interprets the question (for example, which date range you mean). The backend then runs fixed, parameterized SQL scoped to your account, and the model is given only those results to write the answer. It never sees anyone else's data, and you can always check its numbers against the queries.
+
+## Product highlights
+
+- **Review before saving:** entries stay drafts until you explicitly confirm them.
+- **Keep the source:** a receipt stays attached to its draft and transaction as evidence.
+- **Understand the month:** spending, income, categories, and history at a glance.
 
 ### Core capabilities
 
 - Record income and expenses through chat or a single receipt image.
-- Ask owner-scoped questions about totals over supported date ranges.
+- Ask questions in natural language and get answers computed from your own ledger, with the SQL shown.
 - Preview and confirm creates, edits, deletes, and undo operations.
 - Browse evidence, reports, saved conversations, and filtered CSV exports.
 - Install it as a standalone PWA on iOS, or use it in any browser.
@@ -107,7 +118,7 @@ PostgreSQL integration tests require a disposable `TEST_DATABASE_URL`. Browser t
 
 ## Demo video
 
-The [15-second demo](demo/output/demo-15s.mp4) is authored as code with [HyperFrames](https://github.com/heygen-com/hyperframes) in [`demo/`](demo/). It uses synthetic data only; interface elements are rebuilt from the frontend source, not recorded from a real account.
+The 15-second demo shown on the landing page is authored as code with [HyperFrames](https://github.com/heygen-com/hyperframes) in [`demo/`](demo/). It uses synthetic data only; interface elements are rebuilt from the frontend source, not recorded from a real account.
 
 To edit or re-render, install Node.js 22+ and FFmpeg, then run:
 
@@ -115,7 +126,7 @@ To edit or re-render, install Node.js 22+ and FFmpeg, then run:
 cd demo
 npm run dev                             # live preview in the browser
 npm run check                           # lint, layout, motion, and contrast checks
-npx hyperframes render -o output/demo-15s.mp4
+npx hyperframes render -o ../frontend/public/demo.mp4   # served by the landing page
 ```
 
 ## License

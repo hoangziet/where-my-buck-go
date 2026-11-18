@@ -25,7 +25,7 @@ export function TopNav() {
   return (
     <header className="sticky top-0 z-30 shrink-0 border-b border-border-nav bg-surface pt-[env(safe-area-inset-top)]">
       <div className="min-h-16 lg:h-[72px] px-4 lg:px-7 xl:px-10 flex items-center justify-between gap-3 lg:justify-start lg:gap-8">
-        <Link href="/dashboard" className="flex min-w-0 shrink-0 items-center gap-2.5 no-underline text-ink rounded-lg transition-opacity duration-150 hover:opacity-80">
+        <Link href="/" className="flex min-w-0 shrink-0 items-center gap-2.5 no-underline text-ink rounded-lg transition-opacity duration-150 hover:opacity-80">
           <LogoMark />
           <span className="font-display font-bold text-sm sm:text-base whitespace-nowrap">Where My Buck Go</span>
         </Link>
