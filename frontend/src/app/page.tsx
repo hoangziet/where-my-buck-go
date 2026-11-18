@@ -44,7 +44,7 @@ const steps = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-bg text-ink">
+    <div className="landing-page min-h-screen bg-bg text-ink">
       <header className="max-w-[1200px] mx-auto px-8 py-6 flex flex-wrap items-center justify-between gap-4">
         <a href="#top" className="flex items-center gap-2.5 no-underline text-ink">
           <LogoMark size={32} />
