@@ -38,11 +38,12 @@ class PostgresHistoryStore(HistoryStore):
     def append_message(
         self, owner: str, chat_id: str, role: str, text: str, now: datetime,
         debug_trace: list[dict[str, str]] | None = None,
+        evidence_id: str | None = None,
     ) -> None:
         with self.engine.begin() as conn:
             conn.execute(insert(chat_messages).values(
                 id=str(uuid4()), chat_id=chat_id, owner_id=owner, role=role, text=text,
-                debug_trace=debug_trace, created_at=now,
+                evidence_id=evidence_id, debug_trace=debug_trace, created_at=now,
             ))
 
     def chat_exists(self, owner: str, chat_id: str) -> bool:
@@ -64,7 +65,8 @@ class PostgresHistoryStore(HistoryStore):
             rows = conn.execute(select(chat_messages).where(
                 chat_messages.c.chat_id == chat_id, chat_messages.c.owner_id == owner,
             ).order_by(chat_messages.c.created_at)).mappings().all()
-        return [MessageRecord(row["role"], row["text"], row["created_at"], row["debug_trace"]) for row in rows]
+        return [MessageRecord(row["role"], row["text"], row["created_at"], row["debug_trace"],
+                              row["evidence_id"]) for row in rows]
 
     def create_pin(self, owner: str, pin_id: str, title: str, start: date, end: date, now: datetime) -> None:
         with self.engine.begin() as conn:

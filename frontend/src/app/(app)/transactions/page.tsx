@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Download, Plus, Trash2, Pencil, Eye, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { Download, Plus, Trash2, Pencil, Eye, ChevronDown, SlidersHorizontal, CalendarDays, List } from "lucide-react";
 import { appLocalISODate, appLocalTime, formatVND } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { TransactionDto } from "@/lib/api";
@@ -29,6 +29,9 @@ import {
 } from "@/components/transactions/table";
 
 export default function TransactionsPage() {
+  const today = appLocalISODate(new Date());
+  const [calendarMonth, setCalendarMonth] = useState(today.slice(0, 7));
+  const [calendarView, setCalendarView] = useState(false);
   const [items, setItems] = useState<TransactionDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -75,6 +78,32 @@ export default function TransactionsPage() {
     setTypeFilter("all");
     setCategoryFilter("all");
     setRange(EMPTY_RANGE);
+  }
+
+  function applyPeriod(period: "week" | "month") {
+    if (period === "month") {
+      const start = `${today.slice(0, 7)}-01`;
+      const [year, month] = today.split("-").map(Number);
+      const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+      setCalendarMonth(today.slice(0, 7));
+      setRange((current) => ({ ...current, dateFrom: start, dateTo: end }));
+      return;
+    }
+    const date = new Date(`${today}T00:00:00Z`);
+    const offset = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - offset);
+    const start = date.toISOString().slice(0, 10);
+    date.setUTCDate(date.getUTCDate() + 6);
+    setRange((current) => ({ ...current, dateFrom: start, dateTo: date.toISOString().slice(0, 10) }));
+  }
+
+  function applyCalendarMonth(month: string) {
+    if (!month) return;
+    setCalendarMonth(month);
+    const [year, monthNumber] = month.split("-").map(Number);
+    const start = `${month}-01`;
+    const end = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10);
+    setRange((current) => ({ ...current, dateFrom: start, dateTo: end }));
   }
 
   const visibleTotal = visible.reduce((sum, t) => sum + signedAmount(t), 0);
@@ -375,8 +404,31 @@ export default function TransactionsPage() {
         </div>
       </div>
       <div className="hidden lg:flex flex-wrap gap-2.5 items-end -mt-2">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => applyPeriod("week")}
+            className="min-h-10 rounded-[10px] border border-border-input bg-surface px-3 text-sm font-medium hover:bg-[#F4F2EC]">This week</button>
+          <button type="button" onClick={() => applyPeriod("month")}
+            className="min-h-10 rounded-[10px] border border-border-input bg-surface px-3 text-sm font-medium hover:bg-[#F4F2EC]">This month</button>
+          <button type="button" aria-pressed={calendarView} onClick={() => setCalendarView((value) => !value)}
+            className="flex min-h-10 items-center gap-2 rounded-[10px] border border-border-input bg-surface px-3 text-sm font-medium hover:bg-[#F4F2EC]">
+            {calendarView ? <List size={16} /> : <CalendarDays size={16} />}
+            {calendarView ? "List view" : "Calendar view"}
+          </button>
+        </div>
         <RangeFilters range={range} onChange={setRange} />
         {filtersActive && <ClearFiltersButton onClick={clearFilters} />}
+      </div>
+
+      <div className="lg:hidden flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => applyPeriod("week")}
+          className="min-h-9 rounded-full border border-border-input bg-surface px-3 text-xs font-medium">This week</button>
+        <button type="button" onClick={() => applyPeriod("month")}
+          className="min-h-9 rounded-full border border-border-input bg-surface px-3 text-xs font-medium">This month</button>
+        <button type="button" aria-pressed={calendarView} onClick={() => setCalendarView((value) => !value)}
+          className="flex min-h-9 items-center gap-1.5 rounded-full border border-border-input bg-surface px-3 text-xs font-medium">
+          {calendarView ? <List size={14} /> : <CalendarDays size={14} />}
+          {calendarView ? "List" : "Calendar"}
+        </button>
       </div>
 
       {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
@@ -394,8 +446,57 @@ export default function TransactionsPage() {
         </p>
       )}
 
+      {calendarView && (
+        <section className="bg-surface border border-border rounded-2xl p-3 lg:p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="m-0 text-base font-semibold">Transactions calendar</h2>
+            <label className="flex items-center gap-2 text-sm text-muted">
+              <span className="sr-only">Calendar month</span>
+              <input type="month" aria-label="Calendar month" value={calendarMonth}
+                onChange={(event) => applyCalendarMonth(event.target.value)}
+                className="min-h-10 rounded-[10px] border border-border-input bg-surface px-3 text-sm text-ink" />
+            </label>
+          </div>
+          <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-border-row bg-border-row">
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+              <div key={day} className="bg-[#F4F2EC] px-1 py-2 text-center text-[11px] font-semibold text-muted lg:text-xs">{day}</div>
+            ))}
+            {(() => {
+              const [year, month] = calendarMonth.split("-").map(Number);
+              const offset = (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7;
+              const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+              const cells = Array.from({ length: Math.ceil((offset + days) / 7) * 7 }, (_, index) => {
+                const day = index - offset + 1;
+                if (day < 1 || day > days) return <div key={`empty-${index}`} className="min-h-20 bg-white lg:min-h-28" />;
+                const date = `${calendarMonth}-${String(day).padStart(2, "0")}`;
+                const dayItems = visible.filter((transaction) => transaction.occurredDate === date);
+                const total = dayItems.reduce((sum, transaction) => sum + signedAmount(transaction), 0);
+                return (
+                  <div key={date} className="min-h-20 overflow-hidden bg-white p-1.5 lg:min-h-28 lg:p-2">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-semibold">{day}</span>
+                      {dayItems.length > 0 && <span className="truncate font-mono text-[9px] text-muted lg:text-[10px]">{formatVND(total)}</span>}
+                    </div>
+                    <div className="mt-1 flex flex-col gap-1">
+                      {dayItems.slice(0, 3).map((transaction) => (
+                        <div key={transaction.id} title={`${transaction.description}: ${formatVND(signedAmount(transaction))}`}
+                          className={`truncate rounded px-1 py-0.5 text-[9px] lg:text-[11px] ${transaction.direction === "income" ? "bg-accent-soft-bg text-accent-strong" : "bg-[#F4F2EC] text-ink-2"}`}>
+                          {transaction.description}
+                        </div>
+                      ))}
+                      {dayItems.length > 3 && <span className="text-[9px] text-muted">+{dayItems.length - 3} more</span>}
+                    </div>
+                  </div>
+                );
+              });
+              return cells;
+            })()}
+          </div>
+        </section>
+      )}
+
       {/* Desktop table */}
-      <div className="hidden lg:block bg-surface border border-border rounded-2xl overflow-x-auto">
+      {!calendarView && <div className="hidden lg:block bg-surface border border-border rounded-2xl overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
             <tr className="text-muted text-xs uppercase tracking-wide">
@@ -461,10 +562,10 @@ export default function TransactionsPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
 
       {/* Mobile grouped list */}
-      <div className="lg:hidden flex flex-col gap-1.5">
+      {!calendarView && <div className="lg:hidden flex flex-col gap-1.5">
         {groups.map(([group, groupItems]) => {
           const total = groupItems.reduce((a, t) => a + (t.direction === "income" ? Number(t.amount) : -Number(t.amount)), 0);
           return (
@@ -522,7 +623,7 @@ export default function TransactionsPage() {
             </div>
           );
         })}
-      </div>
+      </div>}
 
       {lastDeleted && (
         <div

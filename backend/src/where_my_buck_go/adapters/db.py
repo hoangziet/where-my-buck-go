@@ -143,6 +143,19 @@ chats = Table(
 )
 Index("ix_chats_owner_created", chats.c.owner_id, chats.c.created_at)
 
+telegram_connections = Table(
+    "telegram_connections", metadata,
+    Column("owner_id", String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("encrypted_bot_token", LargeBinary, nullable=False),
+    Column("bot_username", String(64), nullable=False),
+    Column("webhook_secret_digest", LargeBinary(32), nullable=False),
+    Column("pairing_code_digest", LargeBinary(32), nullable=False),
+    Column("pairing_expires_at", DateTime(timezone=True), nullable=False),
+    Column("telegram_chat_id", String(64)),
+    Column("app_chat_id", String(36)),
+    Column("connected_at", DateTime(timezone=True), nullable=False),
+)
+
 chat_messages = Table(
     "chat_messages", metadata,
     Column("id", String(36), primary_key=True),
@@ -150,6 +163,7 @@ chat_messages = Table(
     Column("owner_id", String(36), ForeignKey("users.id"), nullable=False),
     Column("role", String(10), nullable=False),
     Column("text", String(2000), nullable=False),
+    Column("evidence_id", String(36), ForeignKey("evidence.id")),
     Column("debug_trace", JSON),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )

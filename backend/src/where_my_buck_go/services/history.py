@@ -21,6 +21,7 @@ class MessageRecord:
     text: str
     created_at: datetime
     debug_trace: list[dict[str, str]] | None = None
+    evidence_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class HistoryStore(Protocol):
     def append_message(
         self, owner: str, chat_id: str, role: str, text: str, now: datetime,
         debug_trace: list[dict[str, str]] | None = None,
+        evidence_id: str | None = None,
     ) -> None: ...
     def chat_exists(self, owner: str, chat_id: str) -> bool: ...
     def list_chats(self, owner: str) -> list[ChatSummary]: ...
@@ -72,8 +74,9 @@ class HistoryService:
     def record_exchange(
         self, owner: str, chat_id: str, user_text: str, assistant_text: str, now: datetime,
         debug_trace: list[dict[str, str]] | None = None,
+        user_evidence_id: str | None = None,
     ) -> None:
-        self.store.append_message(owner, chat_id, "user", user_text[:2000], now)
+        self.store.append_message(owner, chat_id, "user", user_text[:2000], now, evidence_id=user_evidence_id)
         if assistant_text:
             self.store.append_message(owner, chat_id, "assistant", assistant_text[:2000], now, debug_trace)
 
@@ -85,7 +88,7 @@ class HistoryService:
         if not self.store.chat_exists(owner, chat_id):
             return None
         return [{"role": item.role, "text": item.text, "createdAt": item.created_at.isoformat(),
-                 "debugTrace": item.debug_trace}
+                 "debugTrace": item.debug_trace, "evidenceId": item.evidence_id}
                 for item in self.store.list_messages(owner, chat_id)]
 
     def pin(self, owner: str, title: str, start: date, end: date, now: datetime) -> dict[str, object]:

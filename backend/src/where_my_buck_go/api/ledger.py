@@ -325,9 +325,13 @@ def ledger_blueprint(
             actual_chat_id = history.start_or_continue(owner(), chat_id, title_hint, now)
             user_msg = caption if caption else f"[Hóa đơn: {preview.description}]"
             assistant_msg = "Đã tạo bản nháp từ ảnh; cần xác nhận riêng."
+            evidence_ids = draft.body.get("evidenceIds")
+            user_evidence_id = (evidence_ids[0] if isinstance(evidence_ids, list) and evidence_ids
+                                and isinstance(evidence_ids[0], str) else None)
             history.record_exchange(
                 owner(), actual_chat_id, user_msg, assistant_msg, now,
                 debug_trace=trace.snapshot(),
+                user_evidence_id=user_evidence_id,
             )
 
         return jsonify(kind="image_intake", proposal=draft.body,

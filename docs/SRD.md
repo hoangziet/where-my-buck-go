@@ -4,7 +4,7 @@
 
 Where My Buck Go is a personal finance assistant for one owner. The web app supports chat-based income and expense entry, receipt image intake, financial questions, transaction history, reports, CSV export, edits, soft deletes, and undo. There is no public registration. Banking sync, multiple wallets, recurring transactions, budgets, and CSV import are out of scope for v1.
 
-The web app is the first delivery channel. Telegram is a possible later milestone and is not required for the web release.
+The web app is the primary delivery channel. A personal Telegram bot can be connected from Settings and paired to one private Telegram chat. Telegram messages use the same draft and explicit-confirmation ledger rules as the web chat.
 
 ## Current Architecture
 
@@ -34,7 +34,19 @@ Backend responsibilities are separated into `api/` (HTTP, auth, validation), `do
 - One text message can produce multiple independent proposals. Each proposal requires its own confirmation.
 - Each image intake request accepts one PNG or JPEG image and creates one proposal for the receipt total, preserving the original image as evidence. Multiple images are not supported in a single request. An optional caption may clarify merchant or category; receipt amount, date, and time take precedence over caption values.
 - Evidence remains associated with its draft and confirmed transaction and can be viewed in the web app.
+- Receipt images remain linked to the user message in chat history and render again when the owner reopens that conversation.
 - Edits, soft deletes, and undo require a preview and explicit confirmation. Chat requests matching multiple transactions require the owner to select one.
+- Transactions can be viewed in a month calendar; date-range filters support the current week and month.
+
+## Telegram Integration
+
+- Each owner may connect one personal Telegram bot by providing a BotFather token in Settings. The token is encrypted at rest; Telegram webhook secrets and one-time pairing codes are stored as digests.
+- The bot is paired through a short-lived code and accepts messages only from its paired private chat. Chat drafts are never written to the ledger without `/confirm <draft-id>`; `/discard <draft-id>` discards a draft.
+- Disconnecting removes the stored connection and asks Telegram to delete the webhook. The app's HTTPS origin must be reachable by Telegram for webhooks to work.
+
+## Public Information Pages
+
+- Landing-page footer links lead to Privacy, Terms, and Contact pages. Contact and privacy requests use the owner-provided address `hoangziet22@gmail.com`.
 
 ## Authentication and Security
 
@@ -47,4 +59,4 @@ Backend responsibilities are separated into `api/` (HTTP, auth, validation), `do
 
 Keep modules cohesive, public Python APIs typed, and TypeScript strict. Cover money, date/time, authorization, idempotency, and draft-confirm behavior with tests. Run the backend tests, Ruff, mypy, frontend lint, and frontend build before reporting a code change as complete.
 
-Implemented capabilities include authentication, draft/confirm ledger flows, chat, single-image intake, reports, evidence viewing, CSV export, Docker Compose, AWS S3 and R2 evidence adapters, managed RDS, Terraform infrastructure, and terminal-driven releases. Production follow-up acceptance follows the AWS deployment plan. Telegram remains a later integration.
+Implemented capabilities include authentication, draft/confirm ledger flows, web chat, personal Telegram bot integration, single-image intake with chat-history evidence, calendar and list transaction views, public privacy/terms/contact pages, reports, evidence viewing, CSV export, Docker Compose, AWS S3 and R2 evidence adapters, managed RDS, Terraform infrastructure, and terminal-driven releases. Production follow-up acceptance follows the AWS deployment plan.
