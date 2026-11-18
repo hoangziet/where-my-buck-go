@@ -358,15 +358,19 @@ function PeriodFilter({ period, onChange }: { period: DashboardPeriod; onChange:
 function ChartBar({ label, amount, max, color, active, onToggle }: {
   label: string; amount: number; max: number; color: string; active: boolean; onToggle: () => void;
 }) {
-  const height = Math.max(4, Math.round((amount / max) * 196));
+  const height = amount > 0 ? Math.max(4, Math.round((amount / max) * 196)) : 0;
   return (
     <div className="flex h-full w-[40%] max-w-[22px] items-end">
       <div className="group relative w-full" style={{ height: `${height}px` }}>
-        <button type="button" aria-label={label} onClick={onToggle}
-          className={`h-full w-full rounded-t ${color} hover:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`} />
-        <span className={`pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs text-white shadow-lg ${active ? "block" : "hidden group-hover:block group-focus-within:block"}`}>
-          {label}
-        </span>
+        {amount > 0 && (
+          <>
+            <button type="button" aria-label={label} onClick={onToggle}
+              className={`block h-full w-full rounded-t ${color} hover:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`} />
+            <span className={`pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs text-white shadow-lg ${active ? "block" : "hidden group-hover:block group-focus-within:block"}`}>
+              {label}
+            </span>
+          </>
+        )}
       </div>
     </div>
   );
