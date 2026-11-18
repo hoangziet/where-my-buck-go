@@ -275,6 +275,19 @@ export function reportsSummary(months = 6): Promise<ReportsSummary> {
   return request(`/api/reports/summary?months=${months}`);
 }
 
+export interface DashboardSummary {
+  start: string;
+  end: string;
+  totals: { income: string; expense: string };
+  days: { date: string; income: string; expense: string }[];
+  categories: Partial<Record<Category, string>>;
+  balance: { income: string; expense: string };
+}
+
+export function dashboardSummary(period: "week" | "month"): Promise<DashboardSummary> {
+  return request(`/api/reports/dashboard?period=${period}`);
+}
+
 export interface ChatHistoryItem {
   role: "user" | "assistant";
   text: string;

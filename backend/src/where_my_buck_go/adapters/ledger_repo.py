@@ -243,6 +243,23 @@ class PostgresLedgerStore(LedgerStore):
                 entry[direction] = str(amount)
         return [by_month[label] for label in sorted(by_month)]
 
+    def daily_totals(self, owner: str, start: date, end: date) -> list[dict[str, str]]:
+        with self.engine.connect() as conn:
+            rows = conn.execute(select(
+                transactions.c.occurred_date, transactions.c.direction, func.sum(transactions.c.amount),
+            ).where(
+                transactions.c.owner_id == owner, transactions.c.deleted_at.is_(None),
+                transactions.c.occurred_date >= start, transactions.c.occurred_date <= end,
+            ).group_by(transactions.c.occurred_date, transactions.c.direction)
+             .order_by(transactions.c.occurred_date)).all()
+        by_day: dict[str, dict[str, str]] = {}
+        for occurred_date, direction, amount in rows:
+            label = cast(date, occurred_date).isoformat()
+            entry = by_day.setdefault(label, {"date": label, "income": "0", "expense": "0"})
+            if direction in ("income", "expense"):
+                entry[direction] = str(amount)
+        return [by_day[label] for label in sorted(by_day)]
+
     def category_totals(self, owner: str, start: date, end: date) -> dict[str, str]:
         with self.engine.connect() as conn:
             rows = conn.execute(select(transactions.c.category, func.sum(transactions.c.amount)).where(

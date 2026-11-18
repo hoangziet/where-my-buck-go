@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MessageCircle, Receipt, Database, Check, Bookmark, History } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
+import { LandingActions } from "@/components/landing/LandingActions";
 
 const features = [
   {
@@ -43,7 +44,7 @@ const steps = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-bg text-ink">
+    <div className="landing-page min-h-screen bg-bg text-ink">
       <header className="max-w-[1200px] mx-auto px-8 py-6 flex flex-wrap items-center justify-between gap-4">
         <a href="#top" className="flex items-center gap-2.5 no-underline text-ink">
           <LogoMark size={32} />
@@ -53,8 +54,7 @@ export default function LandingPage() {
           <a href="#features" className="text-ink-3 no-underline transition-colors duration-150 hover:text-ink">Features</a>
           <a href="#how" className="text-ink-3 no-underline transition-colors duration-150 hover:text-ink">How it works</a>
           <a href="#reports" className="text-ink-3 no-underline transition-colors duration-150 hover:text-ink">Reports</a>
-          <Link href="/login" className="text-ink no-underline font-medium transition-colors duration-150 hover:text-accent-strong">Sign in</Link>
-          <Link href="/chat" className="bg-ink text-white no-underline px-4.5 py-2.5 rounded-[10px] font-medium transition-colors duration-150 hover:bg-accent-strong">Get started</Link>
+          <LandingActions placement="nav" />
         </nav>
       </header>
 
@@ -75,9 +75,7 @@ export default function LandingPage() {
             reports — and checks with you before anything is saved.
           </p>
           <div className="flex flex-wrap gap-3">
-            <Link href="/chat" className="bg-accent text-white no-underline px-6 py-4 rounded-xl font-semibold text-base transition-colors duration-150 hover:bg-accent-strong">
-              Start tracking free
-            </Link>
+            <LandingActions placement="hero" />
             <a href="#how" className="bg-surface text-ink no-underline px-6 py-4 rounded-xl font-medium text-base border border-border-input transition-colors duration-150 hover:bg-[#F4F2EC]">
               See how it works
             </a>
@@ -206,9 +204,7 @@ export default function LandingPage() {
           Find out where your buck goes.
         </h2>
         <p className="m-0 text-lg text-ink-3 max-w-[520px]">Start with one message. Your first report is a question away.</p>
-        <Link href="/chat" className="bg-accent text-white no-underline px-7 py-4 rounded-xl font-semibold text-[17px] transition-colors duration-150 hover:bg-accent-strong">
-          Start tracking free
-        </Link>
+        <LandingActions placement="footer" />
       </section>
 
       <footer className="border-t border-border-row">

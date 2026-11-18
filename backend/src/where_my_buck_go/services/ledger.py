@@ -69,6 +69,7 @@ class LedgerStore(Protocol):
     def list_evidence_batch(self, owner: str, transaction_ids: list[str]) -> dict[str, list[dict[str, str]]]: ...
     def aggregate(self, owner: str, start: date, end: date) -> dict[str, str]: ...
     def monthly_totals(self, owner: str, start: date, end: date) -> list[dict[str, str]]: ...
+    def daily_totals(self, owner: str, start: date, end: date) -> list[dict[str, str]]: ...
     def category_totals(self, owner: str, start: date, end: date) -> dict[str, str]: ...
 
 
@@ -294,6 +295,15 @@ class LedgerService:
         return {"start": start.isoformat(), "end": end.isoformat(), "totals": totals,
                 "months": self.store.monthly_totals(owner, start, end),
                 "categories": self.store.category_totals(owner, start, end)}
+
+    def dashboard_summary(self, owner: str, start: date, end: date) -> dict[str, object]:
+        return {
+            "start": start.isoformat(), "end": end.isoformat(),
+            "totals": self.store.aggregate(owner, start, end),
+            "days": self.store.daily_totals(owner, start, end),
+            "categories": self.store.category_totals(owner, start, end),
+            "balance": self.store.aggregate(owner, date.min, end),
+        }
 
     def list_transactions_with_evidence(self, owner: str) -> list[dict[str, object]]:
         txs = self.store.list_transactions(owner)

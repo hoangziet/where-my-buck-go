@@ -8,6 +8,8 @@ import type { TransactionDto } from "@/lib/api";
 import { ApiError, CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
 import { TransactionFormModal, type TransactionFormValues } from "@/components/transactions/TransactionFormModal";
 import { EvidenceModal } from "@/components/transactions/EvidenceModal";
+import { TransactionDetailsModal } from "@/components/transactions/TransactionDetailsModal";
+import { CalendarDayModal } from "@/components/transactions/CalendarDayModal";
 import { ClearFiltersButton, RangeFilters, SearchInput, SortableHeader } from "@/components/transactions/TableControls";
 import { TransactionChangePreview, type PendingChange } from "@/components/transactions/TransactionChangePreview";
 import {
@@ -46,6 +48,8 @@ export default function TransactionsPage() {
   const [adding, setAdding] = useState(false);
   const [pendingChange, setPendingChange] = useState<PendingChange | null>(null);
   const [viewingEvidenceFor, setViewingEvidenceFor] = useState<TransactionDto | null>(null);
+  const [viewingTransaction, setViewingTransaction] = useState<TransactionDto | null>(null);
+  const [viewingDay, setViewingDay] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [undoing, setUndoing] = useState(false);
@@ -78,23 +82,6 @@ export default function TransactionsPage() {
     setTypeFilter("all");
     setCategoryFilter("all");
     setRange(EMPTY_RANGE);
-  }
-
-  function applyPeriod(period: "week" | "month") {
-    if (period === "month") {
-      const start = `${today.slice(0, 7)}-01`;
-      const [year, month] = today.split("-").map(Number);
-      const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
-      setCalendarMonth(today.slice(0, 7));
-      setRange((current) => ({ ...current, dateFrom: start, dateTo: end }));
-      return;
-    }
-    const date = new Date(`${today}T00:00:00Z`);
-    const offset = (date.getUTCDay() + 6) % 7;
-    date.setUTCDate(date.getUTCDate() - offset);
-    const start = date.toISOString().slice(0, 10);
-    date.setUTCDate(date.getUTCDate() + 6);
-    setRange((current) => ({ ...current, dateFrom: start, dateTo: date.toISOString().slice(0, 10) }));
   }
 
   function applyCalendarMonth(month: string) {
@@ -405,10 +392,6 @@ export default function TransactionsPage() {
       </div>
       <div className="hidden lg:flex flex-wrap gap-2.5 items-end -mt-2">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => applyPeriod("week")}
-            className="min-h-10 rounded-[10px] border border-border-input bg-surface px-3 text-sm font-medium hover:bg-[#F4F2EC]">This week</button>
-          <button type="button" onClick={() => applyPeriod("month")}
-            className="min-h-10 rounded-[10px] border border-border-input bg-surface px-3 text-sm font-medium hover:bg-[#F4F2EC]">This month</button>
           <button type="button" aria-pressed={calendarView} onClick={() => setCalendarView((value) => !value)}
             className="flex min-h-10 items-center gap-2 rounded-[10px] border border-border-input bg-surface px-3 text-sm font-medium hover:bg-[#F4F2EC]">
             {calendarView ? <List size={16} /> : <CalendarDays size={16} />}
@@ -420,10 +403,6 @@ export default function TransactionsPage() {
       </div>
 
       <div className="lg:hidden flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => applyPeriod("week")}
-          className="min-h-9 rounded-full border border-border-input bg-surface px-3 text-xs font-medium">This week</button>
-        <button type="button" onClick={() => applyPeriod("month")}
-          className="min-h-9 rounded-full border border-border-input bg-surface px-3 text-xs font-medium">This month</button>
         <button type="button" aria-pressed={calendarView} onClick={() => setCalendarView((value) => !value)}
           className="flex min-h-9 items-center gap-1.5 rounded-full border border-border-input bg-surface px-3 text-xs font-medium">
           {calendarView ? <List size={14} /> : <CalendarDays size={14} />}
@@ -479,12 +458,14 @@ export default function TransactionsPage() {
                     </div>
                     <div className="mt-1 flex flex-col gap-1">
                       {dayItems.slice(0, 3).map((transaction) => (
-                        <div key={transaction.id} title={`${transaction.description}: ${formatVND(signedAmount(transaction))}`}
-                          className={`truncate rounded px-1 py-0.5 text-[9px] lg:text-[11px] ${transaction.direction === "income" ? "bg-accent-soft-bg text-accent-strong" : "bg-[#F4F2EC] text-ink-2"}`}>
+                        <button type="button" key={transaction.id} title={`${transaction.description}: ${formatVND(signedAmount(transaction))}`}
+                          onClick={() => setViewingTransaction(transaction)}
+                          className={`w-full truncate rounded px-1 py-0.5 text-left text-[9px] lg:text-[11px] ${transaction.direction === "income" ? "bg-accent-soft-bg text-accent-strong" : "bg-[#F4F2EC] text-ink-2"}`}>
                           {transaction.description}
-                        </div>
+                        </button>
                       ))}
-                      {dayItems.length > 3 && <span className="text-[9px] text-muted">+{dayItems.length - 3} more</span>}
+                      {dayItems.length > 3 && <button type="button" onClick={() => setViewingDay(date)}
+                        className="text-left text-[9px] font-medium text-accent-strong hover:underline">+{dayItems.length - 3} more</button>}
                     </div>
                   </div>
                 );
@@ -640,6 +621,26 @@ export default function TransactionsPage() {
             {undoing ? "…" : "Undo"}
           </button>
         </div>
+      )}
+
+      {viewingDay && (
+        <CalendarDayModal date={viewingDay} transactions={visible.filter((item) => item.occurredDate === viewingDay)}
+          onClose={() => setViewingDay(null)} onSelect={(transaction) => {
+            setViewingDay(null);
+            setViewingTransaction(transaction);
+          }} />
+      )}
+
+      {viewingTransaction && (
+        <TransactionDetailsModal transaction={viewingTransaction} onClose={() => setViewingTransaction(null)}
+          onEdit={() => {
+            setEditing(viewingTransaction);
+            setViewingTransaction(null);
+          }}
+          onViewEvidence={() => {
+            setViewingEvidenceFor(viewingTransaction);
+            setViewingTransaction(null);
+          }} />
       )}
 
       {editing && (

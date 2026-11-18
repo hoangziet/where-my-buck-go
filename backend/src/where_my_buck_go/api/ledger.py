@@ -1,7 +1,7 @@
 """Ledger HTTP boundary: validate transport shape and bind every request to the session owner."""
 
 from collections.abc import Callable
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import cast
 from uuid import UUID
 
@@ -145,6 +145,15 @@ def ledger_blueprint(
         start_year = end.year + (end.month - months + 1 - 1) // 12
         start = date(start_year, start_month, 1)
         return jsonify(service.summary(owner(), start, end))
+
+    @api.route("/reports/dashboard", methods=["GET"])
+    def dashboard_summary() -> Response:
+        period = request.args.get("period", "month")
+        if period not in ("week", "month"):
+            raise InvalidProposal("period must be week or month")
+        today = datetime.now(timezone.utc).astimezone(LOCAL_ZONE).date()
+        start = today - timedelta(days=today.weekday()) if period == "week" else today.replace(day=1)
+        return jsonify(service.dashboard_summary(owner(), start, today))
 
     @api.route("/transactions/<identifier>", methods=["GET"])
     def transaction(identifier: str) -> Response:

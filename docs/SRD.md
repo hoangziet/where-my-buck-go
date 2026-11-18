@@ -36,7 +36,8 @@ Backend responsibilities are separated into `api/` (HTTP, auth, validation), `do
 - Evidence remains associated with its draft and confirmed transaction and can be viewed in the web app.
 - Receipt images remain linked to the user message in chat history and render again when the owner reopens that conversation.
 - Edits, soft deletes, and undo require a preview and explicit confirmation. Chat requests matching multiple transactions require the owner to select one.
-- Transactions can be viewed in a month calendar; date-range filters support the current week and month.
+- Transactions can be viewed in a month calendar. Selecting an entry opens its details, edit action, and original evidence when present; an overflow control reveals every entry on a busy day.
+- Dashboard period controls switch between the current week (Monday through today) and current month (first day through today). Income, expenses, savings, category spending, chart buckets, and recent transactions follow the selected period. Current balance covers all confirmed transactions through today. Weekly charts show days; monthly charts show weeks. Chart bars expose exact values on hover, focus, and touch.
 
 ## Telegram Integration
 
@@ -47,6 +48,7 @@ Backend responsibilities are separated into `api/` (HTTP, auth, validation), `do
 ## Public Information Pages
 
 - Landing-page footer links lead to Privacy, Terms, and Contact pages. Contact and privacy requests use the owner-provided address `hoangziet22@gmail.com`.
+- The landing page remains accessible after sign-in and replaces sign-in and onboarding calls to action with links to the dashboard for an authenticated owner. Application-generated UI copy is in English; user content and AI replies retain their own language.
 
 ## Authentication and Security
 
