@@ -10,11 +10,21 @@ REQUIRED = {'backend', 'frontend', 'docker-compose', 'aws-infrastructure'}
 
 
 def ready(checks):
+    latest = latest_required_checks(checks)
+    return REQUIRED <= latest.keys() and all(c['conclusion'] == 'success' for c in latest.values())
+
+
+def latest_required_checks(checks):
     latest = {}
     for check in checks:
         if check['name'] in REQUIRED and check['id'] > latest.get(check['name'], {}).get('id', -1):
             latest[check['name']] = check
-    return REQUIRED <= latest.keys() and all(c['conclusion'] == 'success' for c in latest.values())
+    return latest
+
+
+def failed(checks):
+    return {name: check['conclusion'] for name, check in latest_required_checks(checks).items()
+            if check['conclusion'] not in (None, 'success')}
 
 
 def main():
@@ -30,6 +40,10 @@ def main():
         if ready(checks['check_runs']):
             print('All required checks passed on the current main commit')
             return
+        failures = failed(checks['check_runs'])
+        if failures:
+            summary = ', '.join(f'{name}: {conclusion}' for name, conclusion in sorted(failures.items()))
+            raise RuntimeError(f'Required checks failed on the current main commit: {summary}')
         time.sleep(5)
     raise RuntimeError('Required checks did not all succeed within ten minutes')
 

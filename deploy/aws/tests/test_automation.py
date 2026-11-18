@@ -31,6 +31,12 @@ def test_missing_or_newer_failed_checks_cannot_release():
     assert not checks.ready([*complete, {**failed, 'conclusion': None}])
 
 
+def test_completed_failure_is_reported_without_waiting_for_other_checks():
+    failed = {'id': 99, 'name': 'frontend', 'conclusion': 'failure'}
+    pending = {'id': 100, 'name': 'backend', 'conclusion': None}
+    assert checks.failed([failed, pending]) == {'frontend': 'failure'}
+
+
 def test_environment_secrets_are_private_and_multiline_is_rejected(tmp_path):
     path = tmp_path/'app.env'
     runtime.write_env(path, {'DB_PASSWORD': "a$b'c\\d"})
