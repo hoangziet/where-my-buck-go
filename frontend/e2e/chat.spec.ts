@@ -401,10 +401,10 @@ test("starter questions show only on a new, empty chat and send when picked", as
 
   const starters = page.getByRole("navigation", { name: "Suggested questions" });
   await expect(starters.getByRole("button")).toHaveCount(4);
-  await starters.getByRole("button", { name: "Tuần này tôi đã chi bao nhiêu?" }).click();
+  await starters.getByRole("button", { name: "How much did I spend this week?" }).click();
 
   await expect(page.getByText("Tuần này bạn đã chi 450.000 ₫.")).toBeVisible();
-  expect(sent).toEqual(["Tuần này tôi đã chi bao nhiêu?"]);
+  expect(sent).toEqual(["How much did I spend this week?"]);
   await expect(starters).toHaveCount(0);
 });
 
