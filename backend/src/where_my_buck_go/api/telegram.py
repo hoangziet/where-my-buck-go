@@ -14,6 +14,7 @@ from flask import Blueprint, Response, g, request
 from flask import jsonify as flask_jsonify
 from sqlalchemy.engine import Engine
 
+from where_my_buck_go.adapters.telegram_format import has_markdown_table, telegram_text_fallback
 from where_my_buck_go.adapters.telegram_repo import PostgresTelegramStore, TelegramConnection
 from where_my_buck_go.services.chat import ChatService
 from where_my_buck_go.services.history import HistoryService
@@ -244,7 +245,21 @@ def telegram_blueprint(
                 response_text = "I could not process that message. Please try again."
         except Exception:
             response_text = "Something went wrong while processing this message. Please try again later."
-        telegram_call(token, "sendMessage", {"chat_id": telegram_chat_id, "text": response_text[:4000]})
+        if has_markdown_table(response_text):
+            try:
+                telegram_call(token, "sendRichMessage", {
+                    "chat_id": telegram_chat_id,
+                    "rich_message": {"markdown": response_text[:16000]},
+                })
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code not in (400, 404):
+                    raise
+                telegram_call(token, "sendMessage", {
+                    "chat_id": telegram_chat_id,
+                    "text": telegram_text_fallback(response_text)[:4000],
+                })
+        else:
+            telegram_call(token, "sendMessage", {"chat_id": telegram_chat_id, "text": response_text[:4000]})
         return jsonify(ok=True)
 
     return api
