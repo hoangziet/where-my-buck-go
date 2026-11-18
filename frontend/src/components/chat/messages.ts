@@ -16,7 +16,7 @@ export type AssistantMessage = (
   | { role: "assistant"; kind: "stored"; text: string }
 ) & { debugTrace?: TraceEntry[] };
 
-export type Message = { role: "user"; text: string; imagePreviewUrl?: string } | AssistantMessage;
+export type Message = { role: "user"; text: string; imagePreviewUrl?: string; imageEvidenceId?: string } | AssistantMessage;
 
 export type ConfirmState = Record<
   string,

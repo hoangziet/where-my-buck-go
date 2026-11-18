@@ -215,9 +215,9 @@ export default function LandingPage() {
         <div className="max-w-[1200px] mx-auto px-8 py-8 flex flex-wrap justify-between gap-4 text-sm text-muted">
           <span>© 2026 Where My Buck Go</span>
           <div className="flex flex-wrap gap-6">
-            <a href="#top" className="text-muted no-underline transition-colors duration-150 hover:text-ink">Privacy</a>
-            <a href="#top" className="text-muted no-underline transition-colors duration-150 hover:text-ink">Terms</a>
-            <a href="#top" className="text-muted no-underline transition-colors duration-150 hover:text-ink">Contact</a>
+            <Link href="/privacy" className="text-muted no-underline transition-colors duration-150 hover:text-ink">Privacy</Link>
+            <Link href="/terms" className="text-muted no-underline transition-colors duration-150 hover:text-ink">Terms</Link>
+            <Link href="/contact" className="text-muted no-underline transition-colors duration-150 hover:text-ink">Contact</Link>
           </div>
         </div>
       </footer>

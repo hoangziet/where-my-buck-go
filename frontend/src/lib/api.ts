@@ -74,6 +74,32 @@ export function changePassword(currentPassword: string, newPassword: string): Pr
   return request("/api/auth/change-password", { method: "POST", body: { currentPassword, newPassword } });
 }
 
+export interface TelegramConnectionDto {
+  connected: boolean;
+  botUsername: string | null;
+  paired: boolean;
+}
+
+export function getTelegramConnection(): Promise<TelegramConnectionDto> {
+  return request("/api/settings/telegram");
+}
+
+export function connectTelegramBot(botToken: string): Promise<{
+  connected: boolean; botUsername: string; pairingCode: string; pairingExpiresAt: string;
+}> {
+  return request("/api/settings/telegram", { method: "POST", body: { botToken } });
+}
+
+export function refreshTelegramPairingCode(): Promise<{
+  botUsername: string | null; pairingCode: string; pairingExpiresAt: string;
+}> {
+  return request("/api/settings/telegram/pairing", { method: "POST", body: {} });
+}
+
+export function disconnectTelegramBot(): Promise<{ disconnected: boolean }> {
+  return request("/api/settings/telegram", { method: "DELETE" });
+}
+
 export type Category =
   | "food_drink"
   | "transport"
@@ -252,6 +278,7 @@ export function reportsSummary(months = 6): Promise<ReportsSummary> {
 export interface ChatHistoryItem {
   role: "user" | "assistant";
   text: string;
+  evidenceId?: string | null;
 }
 
 export interface TraceEntry {
@@ -327,6 +354,7 @@ export interface StoredMessage {
   text: string;
   createdAt: string;
   debugTrace?: TraceEntry[] | null;
+  evidenceId?: string | null;
 }
 
 export function getChatMessages(chatId: string): Promise<{ items: StoredMessage[] }> {

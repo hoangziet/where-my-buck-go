@@ -105,7 +105,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
         if (!active) return;
         setChatId(urlChatId);
         setMessages(res.items.map((m) => (m.role === "user"
-          ? { role: "user", text: m.text }
+          ? { role: "user", text: m.text, imageEvidenceId: m.evidenceId ?? undefined }
           : { role: "assistant", kind: "stored", text: m.text, debugTrace: m.debugTrace ?? undefined })));
         setHistory(res.items.slice(-8).map((m) => ({ role: m.role, text: m.text })));
       })
@@ -408,7 +408,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
 
           {messages.map((m, i) =>
             m.role === "user" ? (
-              <UserBubble key={i} imagePreviewUrl={m.imagePreviewUrl}>{m.text}</UserBubble>
+              <UserBubble key={i} imagePreviewUrl={m.imagePreviewUrl} imageEvidenceId={m.imageEvidenceId}>{m.text}</UserBubble>
             ) : (
               <AiMessage key={i}>
                 {m.kind === "qa" && (

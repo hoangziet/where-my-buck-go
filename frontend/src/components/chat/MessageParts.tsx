@@ -8,12 +8,16 @@ import * as api from "@/lib/api";
 import type { TransactionDto } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/api";
 
-export function UserBubble({ children, imagePreviewUrl }: { children: React.ReactNode; imagePreviewUrl?: string }) {
+export function UserBubble({ children, imagePreviewUrl, imageEvidenceId }: {
+  children: React.ReactNode;
+  imagePreviewUrl?: string;
+  imageEvidenceId?: string;
+}) {
   return (
     <div className="self-end max-w-[75%] flex flex-col items-end gap-1.5">
-      {imagePreviewUrl && (
+      {(imagePreviewUrl || imageEvidenceId) && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={imagePreviewUrl} alt="Attached receipt" className="max-w-[220px] max-h-[220px] rounded-[14px] object-cover" />
+        <img src={imagePreviewUrl ?? `/api/evidence/${imageEvidenceId}`} alt="Attached receipt" className="max-w-[220px] max-h-[220px] rounded-[14px] object-cover" />
       )}
       {children && (
         <div className="bg-ink text-white px-4 py-3 rounded-[16px_16px_4px_16px] whitespace-pre-wrap">{children}</div>

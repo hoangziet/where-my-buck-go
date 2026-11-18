@@ -23,6 +23,7 @@ from where_my_buck_go.adapters.ledger_repo import PostgresLedgerStore
 from where_my_buck_go.adapters.local_evidence import LocalEvidenceStore
 from where_my_buck_go.adapters.object_evidence import object_evidence_from_environment
 from where_my_buck_go.api.ledger import ledger_blueprint
+from where_my_buck_go.api.telegram import telegram_blueprint
 from where_my_buck_go.domain.auth import SESSION_LIFETIME
 from where_my_buck_go.services.auth import AuthService, LoginLimitedError, SessionRecord
 from where_my_buck_go.services.chat import ChatService
@@ -92,6 +93,10 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
             chat = ChatService(GeminiClient(os.environ["GEMINI_API_KEY"],
                                                   os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)), ledger, history)
         app.register_blueprint(ledger_blueprint(ledger, chat, history))
+        if engine is not None:
+            app.register_blueprint(telegram_blueprint(
+                engine, chat, history, ledger, os.environ["AUTH_HMAC_KEY"].encode("utf-8"),
+            ))
 
     @app.after_request
     def prevent_auth_caching(response: Response) -> Response:
@@ -111,6 +116,8 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
     @app.before_request
     def authenticate() -> Response | tuple[Response, int] | None:
         if not request.path.startswith("/api/") or request.path == "/api/health":
+            return None
+        if request.path == "/api/integrations/telegram/webhook":
             return None
         token = request.cookies.get(cookie_name, "")
         session = service.session(token)
