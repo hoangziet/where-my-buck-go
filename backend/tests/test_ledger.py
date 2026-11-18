@@ -3,7 +3,7 @@
 import os
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -273,6 +273,34 @@ def test_reports_summary_aggregates_owner_scoped_months(
     assert summary["months"] == [{"month": "2026-11", "income": "5000000", "expense": "17500"}]
     assert other.get("/api/reports/summary?months=1").json["totals"] == {"income": "0", "expense": "0"}
     assert client.get("/api/reports/summary?months=0").status_code == 400
+
+
+def test_dashboard_summary_uses_current_period_and_all_time_balance(
+    ledger_client: tuple[FlaskClient, str, FlaskClient, str],
+) -> None:
+    client, csrf, other, _ = ledger_client
+    today = datetime.now(timezone.utc).astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+    old_date = today.replace(day=1) - timedelta(days=1)
+    old_body = {**new_expense(), "occurredDate": old_date.isoformat(), "amount": "30000"}
+    today_body = {**new_expense(), "occurredDate": today.isoformat(), "amount": "17500"}
+    for body in (old_body, today_body):
+        proposed = client.post("/api/proposals", json=body, headers=headers(csrf))
+        assert proposed.status_code == 201
+        confirmed = client.post(f'/api/proposals/{proposed.json["id"]}/confirm',
+                                json={"expectedVersion": 1}, headers=headers(csrf))
+        assert confirmed.status_code == 200
+
+    weekly = client.get("/api/reports/dashboard?period=week").json
+    assert weekly["start"] == (today - timedelta(days=today.weekday())).isoformat()
+    assert weekly["end"] == today.isoformat()
+    assert weekly["totals"]["expense"] == "17500"
+    assert weekly["balance"]["expense"] == "47500"
+    assert weekly["days"][-1]["date"] == today.isoformat()
+    monthly = client.get("/api/reports/dashboard?period=month").json
+    assert monthly["start"] == today.replace(day=1).isoformat()
+    assert monthly["totals"]["expense"] == "17500"
+    assert other.get("/api/reports/dashboard?period=week").json["balance"]["expense"] == "0"
+    assert client.get("/api/reports/dashboard?period=year").status_code == 400
 
 
 def test_simultaneous_replay_writes_one_draft(

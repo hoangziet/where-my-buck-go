@@ -27,14 +27,15 @@ test("owner can sign in, load the dashboard, and sign out", async ({ page }) => 
     authenticated = false;
     await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true }) });
   });
-  await page.route("**/api/reports/summary?months=**", (route) => route.fulfill({
+  await page.route("**/api/reports/dashboard?period=**", (route) => route.fulfill({
     contentType: "application/json",
     body: JSON.stringify({
       start: "2026-11-01",
       end: "2026-11-30",
       totals: { income: "0", expense: "0" },
-      months: [],
+      days: [],
       categories: {},
+      balance: { income: "0", expense: "0" },
     }),
   }));
   await page.route("**/api/transactions", (route) => route.fulfill({
@@ -80,14 +81,15 @@ test("a 401 from a mid-session API call redirects to login with an explanation",
     contentType: "application/json",
     body: JSON.stringify({ username: "owner" }),
   }));
-  await page.route("**/api/reports/summary?months=**", (route) => route.fulfill({
+  await page.route("**/api/reports/dashboard?period=**", (route) => route.fulfill({
     contentType: "application/json",
     body: JSON.stringify({
       start: "2026-11-01",
       end: "2026-11-30",
       totals: { income: "0", expense: "0" },
-      months: [],
+      days: [],
       categories: {},
+      balance: { income: "0", expense: "0" },
     }),
   }));
   await page.route("**/api/transactions", (route) => route.fulfill({
@@ -126,9 +128,9 @@ test("a transient network failure on launch retries instead of signing the owner
     if (sessionChecks === 1) return route.abort("internetdisconnected");
     return route.fulfill({ contentType: "application/json", body: JSON.stringify({ username: "owner" }) });
   });
-  await page.route("**/api/reports/summary?months=**", (route) => route.fulfill({
+  await page.route("**/api/reports/dashboard?period=**", (route) => route.fulfill({
     contentType: "application/json",
-    body: JSON.stringify({ start: "2026-11-01", end: "2026-11-30", totals: { income: "0", expense: "0" }, months: [], categories: {} }),
+    body: JSON.stringify({ start: "2026-11-01", end: "2026-11-30", totals: { income: "0", expense: "0" }, days: [], categories: {}, balance: { income: "0", expense: "0" } }),
   }));
   await page.route("**/api/transactions", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [] }) }));
   await page.route("**/api/chat/pins", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [] }) }));
@@ -148,9 +150,9 @@ test("dashboard shows a useless fact instead of the AI shortcuts and can fetch a
     return route.fulfill({ contentType: "application/json", body: JSON.stringify({ id: String(requests), text, source: "example.org", source_url: "https://example.org" }) });
   });
   await page.route("**/api/auth/me", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ username: "owner" }) }));
-  await page.route("**/api/reports/summary?months=**", (route) => route.fulfill({
+  await page.route("**/api/reports/dashboard?period=**", (route) => route.fulfill({
     contentType: "application/json",
-    body: JSON.stringify({ start: "2026-11-01", end: "2026-11-30", totals: { income: "0", expense: "0" }, months: [], categories: {} }),
+    body: JSON.stringify({ start: "2026-11-01", end: "2026-11-30", totals: { income: "0", expense: "0" }, days: [], categories: {}, balance: { income: "0", expense: "0" } }),
   }));
   await page.route("**/api/transactions", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [] }) }));
   await page.route("**/api/chat/pins", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [] }) }));
@@ -170,6 +172,8 @@ test("the brand link opens the landing page, which plays the product demo video"
   await page.goto("/transactions");
   await page.getByRole("banner").getByRole("link", { name: "Where My Buck Go" }).click();
   await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("link", { name: "Open dashboard" })).toHaveCount(3);
+  await expect(page.getByRole("link", { name: "Sign in" })).toHaveCount(0);
   const video = page.locator("video");
   await expect(video).toHaveAttribute("poster", "/demo-poster.jpg");
   await expect(video.locator("source")).toHaveAttribute("src", "/demo.mp4");

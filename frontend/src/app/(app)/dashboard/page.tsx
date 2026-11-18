@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Bookmark, X } from "lucide-react";
-import { formatVND, formatNumber, appLocalMonth, appLocalMonthYear } from "@/lib/format";
+import { formatVND, formatNumber } from "@/lib/format";
 import * as api from "@/lib/api";
-import type { Category, PinDto, ReportsSummary, TransactionDto } from "@/lib/api";
-import { CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
+import type { Category, DashboardSummary, PinDto, TransactionDto } from "@/lib/api";
+import { CATEGORY_LABELS } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { UselessFactCard } from "@/components/dashboard/UselessFactCard";
+import { chartBuckets, type DashboardPeriod } from "@/components/dashboard/period";
 
 const CATEGORY_COLORS: Record<Category, string> = {
   housing: "#14502F",
@@ -23,24 +24,36 @@ const CATEGORY_COLORS: Record<Category, string> = {
 
 export default function DashboardPage() {
   const { username } = useAuth();
-  const [summary, setSummary] = useState<ReportsSummary | null>(null);
-  const [currentMonth, setCurrentMonth] = useState<ReportsSummary | null>(null);
+  const [period, setPeriod] = useState<DashboardPeriod>("month");
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<TransactionDto[]>([]);
   const [pins, setPins] = useState<PinDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([api.reportsSummary(6), api.reportsSummary(1), api.listTransactions(), api.listPins()])
-      .then(([six, one, tx, pinned]) => {
-        setSummary(six);
-        setCurrentMonth(one);
+    let cancelled = false;
+    Promise.all([api.dashboardSummary(period), api.listTransactions(), api.listPins()])
+      .then(([report, tx, pinned]) => {
+        if (cancelled) return;
+        setSummary(report);
         setTransactions(tx.items);
         setPins(pinned.items);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load dashboard"))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load dashboard"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [period]);
+
+  function changePeriod(value: DashboardPeriod) {
+    if (value === period) return;
+    setLoading(true);
+    setError(null);
+    setSummary(null);
+    setActiveTooltip(null);
+    setPeriod(value);
+  }
 
   async function handleUnpin(id: string) {
     try {
@@ -51,25 +64,24 @@ export default function DashboardPage() {
     }
   }
 
-  const income = Number(currentMonth?.totals.income ?? 0);
-  const expense = Number(currentMonth?.totals.expense ?? 0);
-  const balance = useMemo(
-    () => transactions.reduce((a, t) => a + (t.direction === "income" ? Number(t.amount) : -Number(t.amount)), 0),
-    [transactions],
-  );
+  const income = Number(summary?.totals.income ?? 0);
+  const expense = Number(summary?.totals.expense ?? 0);
+  const balance = Number(summary?.balance.income ?? 0) - Number(summary?.balance.expense ?? 0);
   const savedPct = income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
+  const buckets = useMemo(() => summary ? chartBuckets(summary, period) : [], [summary, period]);
   const maxMonthly = useMemo(
-    () => Math.max(1, ...((summary?.months ?? []).flatMap((m) => [Number(m.income), Number(m.expense)]))),
-    [summary],
+    () => Math.max(1, ...buckets.flatMap((bucket) => [bucket.income, bucket.expense])),
+    [buckets],
   );
-  const recent = useMemo(() => [...transactions].slice(0, 5), [transactions]);
+  const recent = useMemo(() => transactions.filter((transaction) => summary &&
+    transaction.occurredDate >= summary.start && transaction.occurredDate <= summary.end).slice(0, 5), [transactions, summary]);
   const categorySpend = useMemo(() => {
-    const entries = Object.entries(currentMonth?.categories ?? {}) as [Category, string][];
+    const entries = Object.entries(summary?.categories ?? {}) as [Category, string][];
     return entries
       .map(([category, amount]) => ({ category, amount: Number(amount) }))
       .filter((c) => c.amount > 0)
       .sort((a, b) => b.amount - a.amount);
-  }, [currentMonth]);
+  }, [summary]);
   const maxCategory = Math.max(1, ...categorySpend.map((c) => c.amount));
   const totalCategorySpend = categorySpend.reduce((a, c) => a + c.amount, 0);
 
@@ -83,24 +95,25 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-1">
             <span className="text-sm text-muted">Good to see you, {username}</span>
             <h1 className="m-0 font-display font-semibold text-[32px] tracking-tight">
-              {appLocalMonthYear(new Date())}
+              Dashboard
             </h1>
           </div>
+          <PeriodFilter period={period} onChange={changePeriod} />
         </div>
 
         <UselessFactCard />
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-          <KpiCard label="Balance" value={loading ? "…" : formatVND(balance)} sub={`Last ${TRANSACTIONS_PAGE_LIMIT} transactions`} />
+          <KpiCard label="Balance" value={loading ? "…" : formatVND(balance)} sub="Current balance" />
           <KpiCard
             label="Income"
             value={loading ? "…" : formatVND(income)}
-            sub="This month"
+            sub={period === "week" ? "This week" : "This month"}
             valueClass="text-accent"
           />
-          <KpiCard label="Expenses" value={loading ? "…" : formatVND(-expense)} sub="This month" />
+          <KpiCard label="Expenses" value={loading ? "…" : formatVND(-expense)} sub={period === "week" ? "This week" : "This month"} />
           <div className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-2">
-            <span className="text-[13px] text-muted">Saved this month</span>
+            <span className="text-[13px] text-muted">Saved {period === "week" ? "this week" : "this month"}</span>
             <span className="font-display font-semibold text-[28px] tracking-tight">{loading ? "…" : `${savedPct}%`}</span>
             <div className="h-1.5 bg-[#EFEDE6] rounded-full overflow-hidden">
               <div className="h-full bg-accent" style={{ width: `${Math.max(0, Math.min(100, savedPct))}%` }} />
@@ -113,41 +126,39 @@ export default function DashboardPage() {
             <div className="flex justify-between items-start gap-3">
               <div className="flex flex-col gap-1">
                 <h2 className="m-0 text-base font-semibold">Income vs expenses</h2>
-                <span className="text-xs text-muted">Last {summary?.months.length ?? 6} months</span>
+                <span className="text-xs text-muted">{period === "week" ? "Daily totals this week" : "Weekly totals this month"}</span>
               </div>
               <div className="flex gap-3.5 text-xs text-ink-3">
                 <Legend color="var(--color-accent)" label="Income" />
                 <Legend color="var(--color-chart-light)" label="Expenses" />
               </div>
             </div>
-            <div role="img" aria-label="Bar chart: income and expenses per month" className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2">
               <div
                 className="h-[210px] grid gap-3 items-end border-b border-border"
                 style={{
-                  gridTemplateColumns: `repeat(${summary?.months.length || 1}, minmax(0, 1fr))`,
+                  gridTemplateColumns: `repeat(${buckets.length || 1}, minmax(0, 1fr))`,
                   backgroundImage: "linear-gradient(#F1EFE9 1px, transparent 1px)",
                   backgroundSize: "100% 52px",
                 }}
               >
-                {(summary?.months ?? []).map((m) => (
-                  <div key={m.month} className="flex gap-1 items-end justify-center h-full">
-                    <div
-                      className="w-[40%] max-w-[22px] bg-accent rounded-t"
-                      style={{ height: `${Math.round((Number(m.income) / maxMonthly) * 196)}px` }}
-                    />
-                    <div
-                      className="w-[40%] max-w-[22px] bg-chart-light rounded-t"
-                      style={{ height: `${Math.round((Number(m.expense) / maxMonthly) * 196)}px` }}
-                    />
+                {buckets.map((bucket) => (
+                  <div key={bucket.key} className="flex gap-1 items-end justify-center h-full">
+                    <ChartBar label={`${bucket.description} · Income: ${formatNumber(bucket.income)} ₫`}
+                      amount={bucket.income} max={maxMonthly} color="bg-accent" active={activeTooltip === `${bucket.key}-income`}
+                      onToggle={() => setActiveTooltip(activeTooltip === `${bucket.key}-income` ? null : `${bucket.key}-income`)} />
+                    <ChartBar label={`${bucket.description} · Expenses: ${formatNumber(bucket.expense)} ₫`}
+                      amount={bucket.expense} max={maxMonthly} color="bg-chart-light" active={activeTooltip === `${bucket.key}-expense`}
+                      onToggle={() => setActiveTooltip(activeTooltip === `${bucket.key}-expense` ? null : `${bucket.key}-expense`)} />
                   </div>
                 ))}
               </div>
               <div
                 className="grid gap-3 text-xs text-muted text-center"
-                style={{ gridTemplateColumns: `repeat(${summary?.months.length || 1}, minmax(0, 1fr))` }}
+                style={{ gridTemplateColumns: `repeat(${buckets.length || 1}, minmax(0, 1fr))` }}
               >
-                {(summary?.months ?? []).map((m) => (
-                  <span key={m.month}>{m.month.slice(5)}</span>
+                {buckets.map((bucket) => (
+                  <span key={bucket.key}>{bucket.label}</span>
                 ))}
               </div>
             </div>
@@ -156,18 +167,18 @@ export default function DashboardPage() {
           <section className="bg-surface border border-border rounded-2xl p-[22px] flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <h2 className="m-0 text-base font-semibold">Spending by category</h2>
-              <span className="text-xs text-muted">This month · {formatNumber(totalCategorySpend)} ₫</span>
+              <span className="text-xs text-muted">{period === "week" ? "This week" : "This month"} · {formatNumber(totalCategorySpend)} ₫</span>
             </div>
             <div className="flex flex-col gap-3">
-              {categorySpend.length === 0 && !loading && <span className="text-sm text-muted">No expenses yet this month.</span>}
+              {categorySpend.length === 0 && !loading && <span className="text-sm text-muted">No expenses yet {period === "week" ? "this week" : "this month"}.</span>}
               {categorySpend.map((c) => (
                 <div key={c.category} className="grid gap-3 items-center text-sm" style={{ gridTemplateColumns: "120px minmax(0,1fr) 110px" }}>
                   <span>{CATEGORY_LABELS[c.category]}</span>
-                  <div className="h-2 bg-border-row rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${(c.amount / maxCategory) * 100}%`, background: CATEGORY_COLORS[c.category] }}
-                    />
+                  <div className="relative h-5">
+                    <CategoryBar label={`${CATEGORY_LABELS[c.category]}: ${formatNumber(c.amount)} ₫`}
+                      width={(c.amount / maxCategory) * 100} color={CATEGORY_COLORS[c.category]}
+                      active={activeTooltip === `category-${c.category}`}
+                      onToggle={() => setActiveTooltip(activeTooltip === `category-${c.category}` ? null : `category-${c.category}`)} />
                   </div>
                   <span className="font-mono text-[13px] text-right">{formatNumber(c.amount)} ₫</span>
                 </div>
@@ -220,7 +231,7 @@ export default function DashboardPage() {
           <div className="flex flex-col">
             <span className="text-[13px] text-muted">Good to see you, {username}</span>
             <h1 className="m-0 font-display font-semibold text-2xl tracking-tight">
-              {appLocalMonth(new Date())}
+              Dashboard
             </h1>
           </div>
           <Link
@@ -231,6 +242,8 @@ export default function DashboardPage() {
             {(username ?? "?").slice(0, 2).toUpperCase()}
           </Link>
         </div>
+
+        <PeriodFilter period={period} onChange={changePeriod} />
 
         <div className="bg-ink text-white rounded-[20px] p-5 flex flex-col gap-3.5">
           <div className="flex flex-col gap-0.5">
@@ -253,23 +266,28 @@ export default function DashboardPage() {
 
         <section className="bg-surface border border-border rounded-2xl p-4 flex flex-col gap-3">
           <h2 className="m-0 text-[15px] font-semibold">Spending by category</h2>
-          {categorySpend.length === 0 && !loading && <span className="text-sm text-muted">No expenses yet this month.</span>}
+          {categorySpend.length === 0 && !loading && <span className="text-sm text-muted">No expenses yet {period === "week" ? "this week" : "this month"}.</span>}
           {categorySpend.length > 0 && (
             <>
-              <div className="flex h-2.5 rounded-full overflow-hidden gap-0.5">
+              <div className="flex h-2.5 rounded-full gap-0.5">
                 {categorySpend.map((c) => (
-                  <div
-                    key={c.category}
-                    className="h-full"
-                    style={{ width: `${(c.amount / totalCategorySpend) * 100}%`, background: CATEGORY_COLORS[c.category] }}
-                  />
+                  <button type="button" key={c.category}
+                    aria-label={`${CATEGORY_LABELS[c.category]}: ${formatNumber(c.amount)} ₫`}
+                    title={`${CATEGORY_LABELS[c.category]}: ${formatNumber(c.amount)} ₫`}
+                    onClick={() => setActiveTooltip(activeTooltip === `mobile-${c.category}` ? null : `mobile-${c.category}`)}
+                    className="group relative h-full rounded-sm"
+                    style={{ width: `${(c.amount / totalCategorySpend) * 100}%`, background: CATEGORY_COLORS[c.category] }}>
+                    <span className={`pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs text-white shadow-lg ${activeTooltip === `mobile-${c.category}` ? "block" : "hidden group-hover:block group-focus-visible:block"}`}>
+                      {CATEGORY_LABELS[c.category]}: {formatNumber(c.amount)} ₫
+                    </span>
+                  </button>
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
                 {categorySpend.map((c) => (
                   <span key={c.category} className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-sm" style={{ background: CATEGORY_COLORS[c.category] }} />
-                    {CATEGORY_LABELS[c.category]} · {(c.amount / 1_000_000).toFixed(1)}M
+                    {CATEGORY_LABELS[c.category]} · {formatNumber(c.amount)} ₫
                   </span>
                 ))}
               </div>
@@ -320,6 +338,54 @@ function KpiCard({
       <span className="text-[13px] text-muted">{label}</span>
       <span className={`font-display font-semibold text-[28px] tracking-tight ${valueClass}`}>{value}</span>
       <span className="text-[13px] text-ink-3">{sub}</span>
+    </div>
+  );
+}
+
+function PeriodFilter({ period, onChange }: { period: DashboardPeriod; onChange: (period: DashboardPeriod) => void }) {
+  return (
+    <div role="group" aria-label="Dashboard period" className="inline-flex w-fit gap-1 rounded-xl border border-border-input bg-surface p-1">
+      {(["week", "month"] as const).map((option) => (
+        <button key={option} type="button" aria-pressed={period === option} onClick={() => onChange(option)}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${period === option ? "bg-ink text-white" : "text-ink-3 hover:bg-[#F4F2EC]"}`}>
+          This {option}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ChartBar({ label, amount, max, color, active, onToggle }: {
+  label: string; amount: number; max: number; color: string; active: boolean; onToggle: () => void;
+}) {
+  const height = Math.max(4, Math.round((amount / max) * 196));
+  return (
+    <div className="flex h-full w-[40%] max-w-[22px] items-end">
+      <div className="group relative w-full" style={{ height: `${height}px` }}>
+        <button type="button" aria-label={label} onClick={onToggle}
+          className={`h-full w-full rounded-t ${color} hover:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`} />
+        <span className={`pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs text-white shadow-lg ${active ? "block" : "hidden group-hover:block group-focus-within:block"}`}>
+          {label}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function CategoryBar({ label, width, color, active, onToggle }: {
+  label: string; width: number; color: string; active: boolean; onToggle: () => void;
+}) {
+  return (
+    <div className="relative h-5 w-full">
+      <div className="absolute inset-x-0 top-1.5 h-2 rounded-full bg-border-row" />
+      <div className="group absolute inset-y-0 left-0" style={{ width: `${width}%` }}>
+        <button type="button" aria-label={label} onClick={onToggle}
+          className="absolute inset-x-0 inset-y-1.5 rounded-full hover:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          style={{ background: color }} />
+        <span className={`pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs text-white shadow-lg ${active ? "block" : "hidden group-hover:block group-focus-within:block"}`}>
+          {label}
+        </span>
+      </div>
     </div>
   );
 }
