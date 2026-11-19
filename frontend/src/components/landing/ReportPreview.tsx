@@ -50,7 +50,7 @@ export function ReportPreview() {
           </span>
         </div>
         <p className="mb-0 mt-4 rounded-xl bg-[#F4F2EC] px-4 py-3 text-sm font-medium text-ink-2">
-          “Tuần này đã chi tiêu bao nhiêu tiền cho ăn uống vậy?”
+          “How much did I spend on food this week?”
         </p>
         <p className="mb-0 mt-4 text-sm leading-6 text-ink-2">
           This week, you spent <strong className="text-accent-strong">292.000 ₫</strong> on Food &amp; Drink across five transactions.
