@@ -4,7 +4,7 @@ import re
 
 
 def _cells(line: str) -> list[str]:
-    return [cell.strip().replace(r"\|", "|") for cell in re.split(r"(?<!\)\|", line.strip().strip("|"))]
+    return [cell.strip().replace(r"\|", "|") for cell in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
 
 
 def _is_separator(line: str, column_count: int) -> bool:
@@ -16,8 +16,8 @@ def has_markdown_table(message: str) -> bool:
     """Return whether a message contains a GitHub-style table."""
     lines = message.splitlines()
     return any(
-        len(_cells(lines[index])) >= 2
-        and "|" in lines[index]
+        "|" in lines[index]
+        and len(_cells(lines[index])) >= 2
         and _is_separator(lines[index + 1], len(_cells(lines[index])))
         for index in range(len(lines) - 1)
     )
