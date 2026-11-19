@@ -10,10 +10,11 @@ from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from flask import Blueprint, Response, g, request
+from flask import Blueprint, Response, current_app, g, request
 from flask import jsonify as flask_jsonify
 from sqlalchemy.engine import Engine
 
+from where_my_buck_go.adapters.gemini import GeminiError
 from where_my_buck_go.adapters.telegram_format import has_markdown_table, telegram_text_fallback
 from where_my_buck_go.adapters.telegram_repo import PostgresTelegramStore, TelegramConnection
 from where_my_buck_go.services.chat import ChatService
@@ -243,7 +244,10 @@ def telegram_blueprint(
                         )
             else:
                 response_text = "I could not process that message. Please try again."
-        except Exception:
+        except GeminiError as error:
+            response_text = str(error)
+        except Exception as error:
+            current_app.logger.error("Telegram message processing failed: %s", type(error).__name__)
             response_text = "Something went wrong while processing this message. Please try again later."
         if has_markdown_table(response_text):
             try:
