@@ -77,6 +77,19 @@ body {
   min-height: 100dvh;
 }
 
+.report-query-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+}
+
+.report-query-dialog::backdrop {
+  background: rgb(22 32 26 / 62%);
+  backdrop-filter: blur(4px);
+}
+
 /* Prevent auto-zoom on iOS Safari when tapping inputs */
 @media screen and (max-width: 768px) {
   input,
