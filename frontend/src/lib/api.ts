@@ -195,6 +195,10 @@ export interface ProposalDto {
   evidenceIds: string[];
 }
 
+export function listOpenProposals(): Promise<{ items: ProposalDto[] }> {
+  return request("/api/proposals");
+}
+
 export function createTransactionDraft(
   fields: { amount: string; direction: "income" | "expense"; description: string; category: Category;
     occurredDate: string; occurredTime: string },

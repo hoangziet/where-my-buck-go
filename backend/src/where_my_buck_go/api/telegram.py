@@ -15,6 +15,7 @@ from flask import jsonify as flask_jsonify
 from sqlalchemy.engine import Engine
 
 from where_my_buck_go.adapters.gemini import GeminiError
+from where_my_buck_go.adapters.telegram_drafts import draft_preview, parse_draft_command
 from where_my_buck_go.adapters.telegram_format import has_markdown_table, telegram_text_fallback
 from where_my_buck_go.adapters.telegram_repo import PostgresTelegramStore, TelegramConnection
 from where_my_buck_go.services.chat import ChatService
@@ -171,8 +172,32 @@ def telegram_blueprint(
             return jsonify(ok=True)
 
         now = datetime.now(timezone.utc)
-        if text.startswith("/confirm "):
-            proposal_id = text.split(maxsplit=1)[1].strip()
+        parts = text.strip().split(maxsplit=1)
+        command_name = parts[0].split("@", maxsplit=1)[0] if parts else ""
+        if command_name in ("/start", "/help"):
+            telegram_call(token, "sendMessage", {
+                "chat_id": telegram_chat_id,
+                "text": "Send an expense note or ask about your money. Send /drafts to review pending drafts.",
+            })
+            return jsonify(ok=True)
+        if command_name == "/drafts" or text.strip() in ("/confirm", "/discard"):
+            drafts = ledger.open_proposals(connection.owner_id)
+            if not drafts:
+                drafts_message = "You have no pending drafts."
+            else:
+                drafts_message = f"You have {len(drafts)} pending draft(s). Here are the latest five:"
+            telegram_call(token, "sendMessage", {"chat_id": telegram_chat_id, "text": drafts_message})
+            for draft in drafts[:5]:
+                telegram_call(token, "sendMessage", {"chat_id": telegram_chat_id,
+                                                       "text": draft_preview(draft)})
+            return jsonify(ok=True)
+
+        compact_command = parse_draft_command(text)
+        action = compact_command[0] if compact_command else command_name.removeprefix("/")
+        proposal_id = (compact_command[1] if compact_command else
+                       parts[1].strip() if command_name in ("/confirm", "/discard")
+                       and len(parts) == 2 else None)
+        if action == "confirm" and proposal_id:
             try:
                 proposal = ledger.proposal_details(connection.owner_id, proposal_id)
                 if proposal.get("state") == "confirmed":
@@ -190,8 +215,7 @@ def telegram_blueprint(
                 message_text = "Draft not found or it cannot be confirmed. Review it in the app."
             telegram_call(token, "sendMessage", {"chat_id": telegram_chat_id, "text": message_text})
             return jsonify(ok=True)
-        if text.startswith("/discard "):
-            proposal_id = text.split(maxsplit=1)[1].strip()
+        if action == "discard" and proposal_id:
             try:
                 proposal = ledger.proposal_details(connection.owner_id, proposal_id)
                 if proposal.get("state") == "discarded":
@@ -209,6 +233,10 @@ def telegram_blueprint(
                 message_text = "Draft not found."
             telegram_call(token, "sendMessage", {"chat_id": telegram_chat_id, "text": message_text})
             return jsonify(ok=True)
+        if command_name.startswith("/"):
+            telegram_call(token, "sendMessage", {"chat_id": telegram_chat_id,
+                                                   "text": "Unknown command. Send /help or /drafts."})
+            return jsonify(ok=True)
 
         previous = history.messages(connection.owner_id, connection.app_chat_id) if connection.app_chat_id else []
         context: list[dict[str, str]] = []
@@ -221,7 +249,8 @@ def telegram_blueprint(
             draft_id = item.get("id")
             if item.get("state") == "draft" and isinstance(draft_id, str):
                 pending_ids.append(draft_id)
-        pending_ids = pending_ids[-5:]
+        pending_ids = pending_ids[:5]
+        new_drafts: list[dict[str, object]] = []
         try:
             result = chat.respond(connection.owner_id, str(uuid5(NAMESPACE_URL, f"tg:{update_id}")), text,
                                   now, context, connection.app_chat_id,
@@ -235,13 +264,8 @@ def telegram_blueprint(
                 if not isinstance(proposals, list) and isinstance(result.body.get("proposal"), dict):
                     proposals = [result.body["proposal"]]
                 if isinstance(proposals, list):
-                    commands = [f"/confirm {item['id']} · /discard {item['id']}" for item in proposals
-                                if isinstance(item, dict) and isinstance(item.get("id"), str)]
-                    if commands:
-                        response_text += (
-                            "\n\nReview each draft in the app. Confirm or discard individually:\n"
-                            + "\n".join(commands)
-                        )
+                    new_drafts = [item for item in proposals
+                                  if isinstance(item, dict) and isinstance(item.get("id"), str)]
             else:
                 response_text = "I could not process that message. Please try again."
         except GeminiError as error:
@@ -264,6 +288,8 @@ def telegram_blueprint(
                 })
         else:
             telegram_call(token, "sendMessage", {"chat_id": telegram_chat_id, "text": response_text[:4000]})
+        for draft in new_drafts:
+            telegram_call(token, "sendMessage", {"chat_id": telegram_chat_id, "text": draft_preview(draft)})
         return jsonify(ok=True)
 
     return api

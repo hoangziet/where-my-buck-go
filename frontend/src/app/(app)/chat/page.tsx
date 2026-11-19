@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Paperclip, Camera, ArrowUp, Receipt, Bookmark, PanelLeft } from "lucide-react";
+import { Plus, Paperclip, Camera, ArrowUp, Receipt, Bookmark, PanelLeft, RefreshCw } from "lucide-react";
 import { ChatSidebar } from "@/components/ChatSidebar";
 import * as api from "@/lib/api";
 import type { ChatHistoryItem, ProposalDto, TraceEntry, TransactionDto } from "@/lib/api";
@@ -63,6 +63,8 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmState>({});
+  const [pendingDrafts, setPendingDrafts] = useState<ProposalDto[]>([]);
+  const [draftLoadError, setDraftLoadError] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set());
   const [selectingIds, setSelectingIds] = useState<Set<string>>(new Set());
   const [pendingImage, setPendingImage] = useState<File | null>(null);
@@ -73,6 +75,30 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
   const retryRequest = useRef<ChatRetry | null>(null);
   const proposalIdempotencyKeys = useRef(new Map<string, string>());
   const imagePreviewUrls = useRef(new Set<string>());
+
+  const refreshPendingDrafts = useCallback(async () => {
+    try {
+      const result = await api.listOpenProposals();
+      setPendingDrafts(result.items);
+      setDraftLoadError(false);
+    } catch {
+      setDraftLoadError(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    api.listOpenProposals()
+      .then((result) => {
+        if (!active) return;
+        setPendingDrafts(result.items);
+        setDraftLoadError(false);
+      })
+      .catch(() => {
+        if (active) setDraftLoadError(true);
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => () => {
     for (const url of imagePreviewUrls.current) URL.revokeObjectURL(url);
@@ -167,11 +193,11 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
       await sendImage(pendingImage, text);
       return;
     }
-    const pendingProposalIds = messages
-      .flatMap(messageProposals)
+    const pendingProposalIds = [...messages.flatMap(messageProposals).reverse(), ...pendingDrafts]
       .filter((p) => isEditableDraft(p) && (!confirmState[p.id] || confirmState[p.id] === "error"))
       .map((p) => p.id)
-      .slice(-MAX_PENDING_DRAFTS);
+      .filter((id, index, ids) => ids.indexOf(id) === index)
+      .slice(0, MAX_PENDING_DRAFTS);
     const previousRetry = retryRequest.current;
     const request = previousRetry?.kind === "text"
       && previousRetry.text === text
@@ -215,6 +241,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
       assistant = { ...assistant, debugTrace: res.debugTrace };
       const revised = new Set(res.kind === "intake" ? res.revisedProposalIds ?? [] : []);
       setMessages((prev) => [...(revised.size ? removeProposals(prev, revised) : prev), assistant]);
+      void refreshPendingDrafts();
       pushHistory(text, historyText);
       retryRequest.current = null;
     } catch (err) {
@@ -273,6 +300,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
         role: "assistant", kind: "image_intake", text: res.message, proposal: res.proposal,
         debugTrace: res.debugTrace,
       }]);
+      void refreshPendingDrafts();
       pushHistory(caption || "Receipt image", res.message);
       retryRequest.current = null;
     } catch (err) {
@@ -311,12 +339,14 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
           original.id, original.version, edits, `Edited draft "${edits.description}" in chat before confirming`,
         );
         setMessages((prev) => replaceProposal(prev, proposal));
+        setPendingDrafts((prev) => prev.map((item) => item.id === proposal.id ? proposal : item));
         proposalIdempotencyKeys.current.delete(`confirm:${original.id}`);
       }
       const { transaction } = await api.confirmProposal(
         proposal.id, proposal.version, proposalActionKey("confirm", proposal.id),
       );
       setConfirmState((prev) => ({ ...prev, [proposal.id]: { transactionId: transaction.id } }));
+      setPendingDrafts((prev) => prev.filter((item) => item.id !== proposal.id));
       proposalIdempotencyKeys.current.delete(`confirm:${proposal.id}`);
     } catch {
       setConfirmState((prev) => ({ ...prev, [proposal.id]: "error" }));
@@ -332,6 +362,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
         proposal.id, proposal.version, proposalActionKey("discard", proposal.id),
       );
       setConfirmState((prev) => ({ ...prev, [proposal.id]: "discarded" }));
+      setPendingDrafts((prev) => prev.filter((item) => item.id !== proposal.id));
       proposalIdempotencyKeys.current.delete(`discard:${proposal.id}`);
     } catch {
       setConfirmState((prev) => ({ ...prev, [proposal.id]: "discard_error" }));
@@ -363,6 +394,11 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
       });
     }
   }
+
+  const displayedProposalIds = new Set(messages.flatMap(messageProposals).map((proposal) => proposal.id));
+  const visiblePendingDrafts = pendingDrafts
+    .filter((proposal) => !displayedProposalIds.has(proposal.id))
+    .slice(0, 20);
 
   return (
     <div className="flex-1 flex overflow-hidden min-h-screen lg:min-h-0">
@@ -398,6 +434,32 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
 
         <div className="flex-1 px-4 lg:px-8 pb-40 lg:pb-8 flex flex-col">
           <div role="log" aria-live="polite" className="w-full max-w-[860px] mx-auto flex flex-col gap-7 pt-4">
+
+          {(pendingDrafts.length > 0 || draftLoadError) && (
+            <section aria-label="Pending drafts" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="m-0 text-base font-semibold text-ink">Pending drafts</h2>
+                  <p className="m-0 mt-1 text-xs text-muted">Review and confirm each item before it is saved.</p>
+                </div>
+                <button type="button" onClick={() => void refreshPendingDrafts()}
+                  aria-label="Refresh pending drafts"
+                  className="w-10 h-10 shrink-0 border-0 bg-transparent text-ink-3 hover:text-ink rounded-lg cursor-pointer flex items-center justify-center">
+                  <RefreshCw size={17} />
+                </button>
+              </div>
+              {draftLoadError && <p role="alert" className="m-0 text-sm text-danger">Could not load pending drafts. Refresh to try again.</p>}
+              {visiblePendingDrafts.map((proposal) => (
+                <ProposalCard key={`${proposal.id}:${proposal.version}`} proposal={proposal}
+                  state={confirmState[proposal.id]}
+                  onConfirm={(edits) => handleConfirm(proposal, edits)}
+                  onDiscard={() => handleDiscard(proposal)} />
+              ))}
+              {pendingDrafts.length > 20 && (
+                <p className="m-0 text-xs text-muted">Showing the latest 20 drafts.</p>
+              )}
+            </section>
+          )}
 
           {messages.length === 0 && (
             <p className="m-0 text-sm text-muted">
