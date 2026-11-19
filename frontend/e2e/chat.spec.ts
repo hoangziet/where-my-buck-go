@@ -32,6 +32,10 @@ async function openChat(page: import("@playwright/test").Page) {
     contentType: "application/json",
     body: JSON.stringify({ items: [] }),
   }));
+  await page.route("**/api/proposals", (route) => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({ items: [] }),
+  }));
   await page.goto("/chat");
   await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
 }
@@ -281,6 +285,10 @@ test("chat sidebar lists previous chats and toggles collapse", async ({ page }) 
         { id: "chat-456", title: "Tiền phòng trọ", createdAt: "2026-11-15T10:00:00Z" },
       ],
     }),
+  }));
+  await page.route("**/api/proposals", (route) => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({ items: [] }),
   }));
 
   await page.goto("/chat");
