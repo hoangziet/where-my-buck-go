@@ -56,6 +56,7 @@ async function request<T>(
 
 export interface Me {
   username: string;
+  salaryModeEnabled: boolean;
 }
 
 export function login(username: string, password: string): Promise<{ username: string; csrfToken: string }> {
@@ -68,6 +69,10 @@ export function logout(): Promise<{ ok: boolean }> {
 
 export function me(): Promise<Me> {
   return request("/api/auth/me");
+}
+
+export function setSalaryMode(enabled: boolean): Promise<{ salaryModeEnabled: boolean }> {
+  return request("/api/settings/salary-mode", { method: "PUT", body: { enabled } });
 }
 
 export function changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {
@@ -108,6 +113,7 @@ export type Category =
   | "entertainment"
   | "housing"
   | "income"
+  | "salary"
   | "other";
 
 export const CATEGORY_LABELS: Record<Category, string> = {
@@ -118,6 +124,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   entertainment: "Entertainment",
   housing: "Housing",
   income: "Income",
+  salary: "Salary",
   other: "Other",
 };
 

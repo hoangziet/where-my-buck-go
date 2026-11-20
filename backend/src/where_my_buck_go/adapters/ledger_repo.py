@@ -10,7 +10,7 @@ from sqlalchemy import func, insert, select, update
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.engine.row import RowMapping
 
-from where_my_buck_go.adapters.db import evidence, idempotency, proposals, transaction_revisions, transactions
+from where_my_buck_go.adapters.db import evidence, idempotency, proposals, transaction_revisions, transactions, users
 from where_my_buck_go.domain.ledger import LedgerFields, ProposalRecord, TransactionRecord, VersionConflict
 from where_my_buck_go.domain.money import Money
 from where_my_buck_go.domain.transaction_time import TransactionTime
@@ -129,6 +129,13 @@ class PostgresLedgerStore(LedgerStore):
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
 
+    def salary_mode_enabled(self, owner: str) -> bool:
+        with self.engine.connect() as conn:
+            return bool(conn.execute(select(users.c.salary_mode_enabled).where(users.c.id == owner)).scalar_one())
+
+    def _salary_visible(self, owner: str) -> bool:
+        return self.salary_mode_enabled(owner)
+
     def execute(self, owner: str, key: str, fingerprint: bytes,
                 operation: Callable[[LedgerSession], LedgerResult]) -> LedgerResult:
         with self.engine.begin() as conn:
@@ -151,24 +158,40 @@ class PostgresLedgerStore(LedgerStore):
 
     def read_proposal(self, owner: str, identifier: str) -> ProposalRecord | None:
         with self.engine.connect() as conn:
-            return PostgresLedgerSession(conn).proposal(owner, identifier)
+            proposal = PostgresLedgerSession(conn).proposal(owner, identifier)
+        if proposal is not None and proposal.fields.category == "salary" and not self._salary_visible(owner):
+            return None
+        return proposal
 
     def list_proposals(self, owner: str) -> list[ProposalRecord]:
+        salary_visible = self._salary_visible(owner)
         with self.engine.connect() as conn:
-            rows = conn.execute(select(proposals).where(
+            statement = select(proposals).where(
                 proposals.c.owner_id == owner, proposals.c.state == "draft",
-            ).order_by(proposals.c.created_at.desc(), proposals.c.id.desc()).limit(200)).mappings().all()
+            )
+            if not salary_visible:
+                statement = statement.where(proposals.c.category != "salary")
+            rows = conn.execute(statement.order_by(
+                proposals.c.created_at.desc(), proposals.c.id.desc(),
+            ).limit(200)).mappings().all()
         return [_proposal(row) for row in rows]
 
     def read_transaction(self, owner: str, identifier: str) -> TransactionRecord | None:
         with self.engine.connect() as conn:
-            return PostgresLedgerSession(conn).transaction(owner, identifier)
+            transaction = PostgresLedgerSession(conn).transaction(owner, identifier)
+        if transaction is not None and transaction.fields.category == "salary" and not self._salary_visible(owner):
+            return None
+        return transaction
 
     def list_transactions(self, owner: str) -> list[TransactionRecord]:
+        salary_visible = self._salary_visible(owner)
         with self.engine.connect() as conn:
-            rows = conn.execute(select(transactions).where(
+            statement = select(transactions).where(
                 transactions.c.owner_id == owner, transactions.c.deleted_at.is_(None),
-            ).order_by(
+            )
+            if not salary_visible:
+                statement = statement.where(transactions.c.category != "salary")
+            rows = conn.execute(statement.order_by(
                 transactions.c.occurred_date.desc(), transactions.c.occurred_time.desc(),
             ).limit(200)).mappings().all()
         return [_transaction(row) for row in rows]
@@ -178,6 +201,17 @@ class PostgresLedgerStore(LedgerStore):
             row = conn.execute(select(evidence).where(
                 evidence.c.id == identifier, evidence.c.owner_id == owner,
             )).mappings().first()
+            if row is not None and not self._salary_visible(owner):
+                salary_proposal = row["proposal_id"] is not None and conn.execute(select(proposals.c.id).where(
+                    proposals.c.id == row["proposal_id"], proposals.c.owner_id == owner,
+                    proposals.c.category == "salary",
+                )).first() is not None
+                salary_transaction = row["transaction_id"] is not None and conn.execute(select(transactions.c.id).where(
+                    transactions.c.id == row["transaction_id"], transactions.c.owner_id == owner,
+                    transactions.c.category == "salary",
+                )).first() is not None
+                if salary_proposal or salary_transaction:
+                    return None
         return EvidenceRecord(row["id"], row["storage_key"], row["sha256_digest"], row["kind"]) if row else None
 
     def list_evidence(self, owner: str, *, proposal_id: str | None = None,
@@ -211,11 +245,15 @@ class PostgresLedgerStore(LedgerStore):
         return result
 
     def aggregate(self, owner: str, start: date, end: date) -> dict[str, str]:
+        salary_visible = self._salary_visible(owner)
         with self.engine.connect() as conn:
-            rows = conn.execute(select(transactions.c.direction, func.sum(transactions.c.amount)).where(
+            statement = select(transactions.c.direction, func.sum(transactions.c.amount)).where(
                 transactions.c.owner_id == owner, transactions.c.deleted_at.is_(None),
                 transactions.c.occurred_date >= start, transactions.c.occurred_date <= end,
-            ).group_by(transactions.c.direction)).all()
+            )
+            if not salary_visible:
+                statement = statement.where(transactions.c.category != "salary")
+            rows = conn.execute(statement.group_by(transactions.c.direction)).all()
         totals = {"income": "0", "expense": "0"}
         for direction, amount in rows:
             if direction in totals:
@@ -224,11 +262,15 @@ class PostgresLedgerStore(LedgerStore):
 
     def monthly_totals(self, owner: str, start: date, end: date) -> list[dict[str, str]]:
         month = func.date_trunc("month", transactions.c.occurred_date)
+        salary_visible = self._salary_visible(owner)
         with self.engine.connect() as conn:
-            rows = conn.execute(select(month, transactions.c.direction, func.sum(transactions.c.amount)).where(
+            statement = select(month, transactions.c.direction, func.sum(transactions.c.amount)).where(
                 transactions.c.owner_id == owner, transactions.c.deleted_at.is_(None),
                 transactions.c.occurred_date >= start, transactions.c.occurred_date <= end,
-            ).group_by(month, transactions.c.direction).order_by(month)).all()
+            )
+            if not salary_visible:
+                statement = statement.where(transactions.c.category != "salary")
+            rows = conn.execute(statement.group_by(month, transactions.c.direction).order_by(month)).all()
         by_month: dict[str, dict[str, str]] = {}
         cursor = start.replace(day=1)
         last = end.replace(day=1)
@@ -244,14 +286,18 @@ class PostgresLedgerStore(LedgerStore):
         return [by_month[label] for label in sorted(by_month)]
 
     def daily_totals(self, owner: str, start: date, end: date) -> list[dict[str, str]]:
+        salary_visible = self._salary_visible(owner)
         with self.engine.connect() as conn:
-            rows = conn.execute(select(
+            statement = select(
                 transactions.c.occurred_date, transactions.c.direction, func.sum(transactions.c.amount),
             ).where(
                 transactions.c.owner_id == owner, transactions.c.deleted_at.is_(None),
                 transactions.c.occurred_date >= start, transactions.c.occurred_date <= end,
-            ).group_by(transactions.c.occurred_date, transactions.c.direction)
-             .order_by(transactions.c.occurred_date)).all()
+            )
+            if not salary_visible:
+                statement = statement.where(transactions.c.category != "salary")
+            rows = conn.execute(statement.group_by(transactions.c.occurred_date, transactions.c.direction)
+                                .order_by(transactions.c.occurred_date)).all()
         by_day: dict[str, dict[str, str]] = {}
         for occurred_date, direction, amount in rows:
             label = cast(date, occurred_date).isoformat()
@@ -261,10 +307,14 @@ class PostgresLedgerStore(LedgerStore):
         return [by_day[label] for label in sorted(by_day)]
 
     def category_totals(self, owner: str, start: date, end: date) -> dict[str, str]:
+        salary_visible = self._salary_visible(owner)
         with self.engine.connect() as conn:
-            rows = conn.execute(select(transactions.c.category, func.sum(transactions.c.amount)).where(
+            statement = select(transactions.c.category, func.sum(transactions.c.amount)).where(
                 transactions.c.owner_id == owner, transactions.c.deleted_at.is_(None),
                 transactions.c.direction == "expense",
                 transactions.c.occurred_date >= start, transactions.c.occurred_date <= end,
-            ).group_by(transactions.c.category)).all()
+            )
+            if not salary_visible:
+                statement = statement.where(transactions.c.category != "salary")
+            rows = conn.execute(statement.group_by(transactions.c.category)).all()
         return {cast(str, category): str(amount) for category, amount in rows}

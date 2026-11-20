@@ -117,6 +117,13 @@ class LedgerService:
         self.store = store
         self.evidence = evidence
 
+    def _require_salary_mode(self, owner: str, category: object) -> None:
+        if category != "salary":
+            return
+        enabled = getattr(self.store, "salary_mode_enabled", lambda _owner: False)(owner)
+        if not enabled:
+            raise InvalidProposal("Enable salary mode in Settings before creating or viewing salary records")
+
     @staticmethod
     def _fingerprint(action: str, body: dict[str, object]) -> bytes:
         payload = json.dumps([action, body], sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -144,6 +151,7 @@ class LedgerService:
         self, tx: LedgerSession, owner: str, body: dict[str, object], now: datetime, written: list[str],
     ) -> LedgerResult:
         fields = self._fields(body, now)
+        self._require_salary_mode(owner, fields.category)
         proposal = ProposalRecord(str(uuid4()), owner, 1, "create", None, None, fields, False, "draft", None)
         evidence = self.evidence.put_text(self._source(body))
         written.append(evidence.storage_key)
@@ -154,6 +162,7 @@ class LedgerService:
     def create_from_image(
         self, owner: str, key: str, fields: LedgerFields, raw: bytes, mime: str, now: datetime,
     ) -> LedgerResult:
+        self._require_salary_mode(owner, fields.category)
         fingerprint_body: dict[str, object] = {
             "imageSha256": hashlib.sha256(raw).hexdigest(), "description": fields.description,
             "amount": str(fields.money.amount) if fields.money else None, "category": fields.category,
@@ -191,6 +200,7 @@ class LedgerService:
         target = tx.transaction(owner, target_id, lock=True)
         if target is None:
             raise NotFound
+        self._require_salary_mode(owner, target.fields.category)
         if target.version != body["expectedVersion"]:
             raise VersionConflict("Transaction changed since preview")
         proposal = self._change_proposal(tx, target, operation, body, now)
@@ -216,8 +226,10 @@ class LedgerService:
             raise VersionConflict("Draft changed since preview")
         if proposal.operation not in ("create", "edit"):
             raise InvalidProposal("Only create and edit drafts can change their fields")
+        fields = self._fields(body, now)
+        self._require_salary_mode(owner, fields.category)
         updated = ProposalRecord(proposal.id, owner, proposal.version + 1, proposal.operation,
-                                 proposal.target_id, proposal.base_version, self._fields(body, now),
+                                 proposal.target_id, proposal.base_version, fields,
                                  False, "draft", None)
         evidence = self.evidence.put_text(self._source(body))
         written.append(evidence.storage_key)
@@ -234,6 +246,7 @@ class LedgerService:
                 raise NotFound
             if proposal.version != expected:
                 raise VersionConflict("Draft changed since preview")
+            self._require_salary_mode(owner, proposal.fields.category)
             target = tx.transaction(owner, proposal.target_id, lock=True) if proposal.target_id else None
             confirmable(proposal, target)
             if target is None:
@@ -258,6 +271,7 @@ class LedgerService:
             proposal = tx.proposal(owner, identifier, lock=True)
             if proposal is None:
                 raise NotFound
+            self._require_salary_mode(owner, proposal.fields.category)
             if proposal.version != expected:
                 raise VersionConflict("Draft changed since preview")
             discardable(proposal)

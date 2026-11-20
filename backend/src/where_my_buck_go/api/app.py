@@ -11,11 +11,12 @@ from urllib.parse import quote
 from flask import Flask, Response, g, request, send_from_directory
 from flask import jsonify as flask_jsonify
 from flask import redirect as flask_redirect
-from sqlalchemy import text
+from sqlalchemy import select, text, update
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from where_my_buck_go.adapters.auth_repo import PostgresAuthStore
-from where_my_buck_go.adapters.db import database_url_from_environment, engine_for
+from where_my_buck_go.adapters.db import database_url_from_environment, engine_for, users
 from where_my_buck_go.adapters.gemini import DEFAULT_MODEL, GeminiClient
 from where_my_buck_go.adapters.google_auth import GoogleAuthClient, google_auth_from_environment
 from where_my_buck_go.adapters.history_repo import PostgresHistoryStore
@@ -47,7 +48,8 @@ redirect = cast(Callable[..., Response], flask_redirect)
 def create_app(service: AuthService | None = None, *, production: bool | None = None,
                ledger: LedgerService | None = None, chat: ChatService | None = None,
                history: HistoryService | None = None,
-               google_auth: GoogleAuthClient | None = None) -> Flask:
+               google_auth: GoogleAuthClient | None = None,
+               engine: Engine | None = None) -> Flask:
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 4_100_000
     is_production = production if production is not None else os.environ.get("APP_ENV") == "production"
@@ -77,10 +79,13 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
     if google_auth is None:
         google_auth = google_auth_from_environment()
     if service is None:
-        engine = engine_for(database_url_from_environment())
+        if engine is None:
+            engine = engine_for(database_url_from_environment())
         service = AuthService(PostgresAuthStore(engine), os.environ["AUTH_HMAC_KEY"].encode("utf-8"))
-    else:
-        engine = None
+    elif engine is None:
+        store = getattr(service, "store", None)
+        if isinstance(store, PostgresAuthStore):
+            engine = store.engine
     if ledger is None and engine is not None:
         root = Path(__file__).resolve().parents[4]
         evidence = (object_evidence_from_environment() if is_production else
@@ -94,8 +99,13 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
                                                   os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)), ledger, history)
         app.register_blueprint(ledger_blueprint(ledger, chat, history))
         if engine is not None:
+            hmac_key = (
+                service.hmac_key
+                if service is not None and getattr(service, "hmac_key", None) is not None
+                else os.environ["AUTH_HMAC_KEY"].encode("utf-8")
+            )
             app.register_blueprint(telegram_blueprint(
-                engine, chat, history, ledger, os.environ["AUTH_HMAC_KEY"].encode("utf-8"),
+                engine, chat, history, ledger, hmac_key,
             ))
 
     @app.after_request
@@ -228,7 +238,27 @@ def create_app(service: AuthService | None = None, *, production: bool | None = 
     @app.route("/api/auth/me", methods=["GET"])
     def me() -> Response:
         session: SessionRecord = g.session
-        return jsonify(username=session.username)
+        salary_mode_enabled = False
+        if engine is not None:
+            with engine.connect() as conn:
+                salary_mode_enabled = bool(conn.execute(
+                    select(users.c.salary_mode_enabled).where(users.c.id == session.user_id)
+                ).scalar_one())
+        return jsonify(username=session.username, salaryModeEnabled=salary_mode_enabled)
+
+    @app.route("/api/settings/salary-mode", methods=["PUT"])
+    def update_salary_mode() -> Response | tuple[Response, int]:
+        session: SessionRecord = g.session
+        data: Any = request.get_json(silent=True)
+        if not isinstance(data, dict) or not isinstance(data.get("enabled"), bool):
+            return jsonify(error="enabled must be a boolean"), 400
+        if engine is None:
+            return jsonify(error="Settings storage is unavailable"), 503
+        with engine.begin() as conn:
+            conn.execute(update(users).where(users.c.id == session.user_id).values(
+                salary_mode_enabled=data["enabled"],
+            ))
+        return jsonify(salaryModeEnabled=data["enabled"])
 
     @app.route("/api/auth/change-password", methods=["POST"])
     def change_password() -> Response | tuple[Response, int]:

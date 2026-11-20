@@ -9,7 +9,7 @@ IMAGE_PROMPT = (
     "itself. Ignore the phone status bar clock and upload time. If a field is absent, return an empty "
     "string; do not guess. One image is one total expense, not line items. Do not include phone numbers "
     "or transaction IDs in the description. Assign exactly one category from: food_drink, transport, bills, "
-    "shopping, entertainment, housing, income, other. The function is a read-only preview; do not claim to "
+    "shopping, entertainment, housing, income, salary, other. The function is a read-only preview; do not claim to "
     "save anything."
 )
 IMAGE_FIELDS: dict[str, object] = {
@@ -21,7 +21,7 @@ IMAGE_FIELDS: dict[str, object] = {
         "status": {"type": "STRING", "enum": ["success", "failed", "unknown"]},
         "direction": {"type": "STRING", "enum": ["expense", "income", "unknown"]},
         "category": {"type": "STRING", "enum": ["food_drink", "transport", "bills", "shopping",
-                                                  "entertainment", "housing", "income", "other"]},
+                                                  "entertainment", "housing", "income", "salary", "other"]},
     },
     "required": ["amount", "currency", "occurred_date", "occurred_time", "description", "status", "direction",
                  "category"],

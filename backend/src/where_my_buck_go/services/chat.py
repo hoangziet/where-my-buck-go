@@ -1,8 +1,9 @@
 """Two-specialist coordinator: read-only Q&A and draft-only transaction intake."""
 
 import json
+import re
 from datetime import date, datetime, timedelta
-from typing import Protocol
+from typing import Protocol, cast
 from zoneinfo import ZoneInfo
 
 from where_my_buck_go.domain.ledger import InvalidProposal, ProposalRecord
@@ -33,7 +34,7 @@ _ROUTE_FIELDS: dict[str, object] = {
         "end": {"type": "STRING", "description": "YYYY-MM-DD for a custom range; otherwise empty"},
     }, "required": ["specialist", "date"],
 }
-_CATEGORIES = ["food_drink", "transport", "bills", "shopping", "entertainment", "housing", "income", "other"]
+_CATEGORIES = ["food_drink", "transport", "bills", "shopping", "entertainment", "housing", "income", "salary", "other"]
 _ITEM_PROPERTIES: dict[str, object] = {
     "amount": {"type": "STRING", "description": "Canonical VND digits, empty when missing"},
     "currency": {"type": "STRING"}, "direction": {"type": "STRING", "enum": ["income", "expense"]},
@@ -48,29 +49,41 @@ _ITEM_PROPERTIES: dict[str, object] = {
 }
 _ITEM_REQUIRED = ["amount", "currency", "direction", "description", "category",
                   "occurredDate", "period", "occurredTime"]
-_ITEM: dict[str, object] = {"type": "OBJECT", "properties": _ITEM_PROPERTIES, "required": _ITEM_REQUIRED}
 _ITEM_KEYS = set(_ITEM_REQUIRED)
-_REVISE_FIELDS: dict[str, object] = {
-    "type": "OBJECT",
-    "properties": {"proposalId": {"type": "STRING"}, **_ITEM_PROPERTIES},
-    "required": ["proposalId", *_ITEM_REQUIRED],
-}
 MAX_PENDING_PROPOSALS = 5
-_INTAKE_FIELDS: dict[str, object] = {"type": "OBJECT", "properties": {
-    "items": {"type": "ARRAY", "items": _ITEM},
-}, "required": ["items"]}
+_SALARY_TERMS = re.compile(
+    r"\b(?:salary|salaries|payroll|paycheck|paychecks|payslip|wage|wages|compensation)\b|lương|luong|tiền lương",
+    re.IGNORECASE,
+)
 _ANSWER_FIELDS: dict[str, object] = {"type": "OBJECT", "properties": {
     "answer": {"type": "STRING"},
 }, "required": ["answer"]}
-_CHANGE_MATCH_FIELDS: dict[str, object] = {
-    "type": "OBJECT", "properties": {
-        "operation": {"type": "STRING", "enum": ["edit", "delete", "undo"]},
-        "matchDescription": {"type": "STRING",
-                             "description": "Keyword(s) from the description to find the transaction; "
-                                            "empty if the owner did not say"},
-        "matchDate": {"type": "STRING", "description": "hôm nay, hôm qua, YYYY-MM-DD, or empty"},
-    }, "required": ["operation", "matchDescription", "matchDate"],
-}
+
+
+def _salary_enabled(ledger: LedgerService, owner: str) -> bool:
+    checker = getattr(ledger.store, "salary_mode_enabled", None)
+    return bool(checker(owner)) if callable(checker) else False
+
+
+def _item_fields(salary_enabled: bool) -> dict[str, object]:
+    properties = dict(_ITEM_PROPERTIES)
+    properties["category"] = {
+        "type": "STRING",
+        "enum": _CATEGORIES if salary_enabled else [category for category in _CATEGORIES if category != "salary"],
+    }
+    return {"type": "OBJECT", "properties": properties, "required": _ITEM_REQUIRED}
+
+
+def _intake_fields(salary_enabled: bool) -> dict[str, object]:
+    return {"type": "OBJECT", "properties": {
+        "items": {"type": "ARRAY", "items": _item_fields(salary_enabled)},
+    }, "required": ["items"]}
+
+
+def _revise_fields(salary_enabled: bool) -> dict[str, object]:
+    properties = cast(dict[str, object], _item_fields(salary_enabled)["properties"])
+    return {"type": "OBJECT", "properties": {"proposalId": {"type": "STRING"}, **properties},
+            "required": ["proposalId", *_ITEM_REQUIRED]}
 
 
 def _blank_optional_fields_to_none(payload: dict[str, object]) -> None:
@@ -115,6 +128,8 @@ class ChatService:
             client_zone = resolve_client_zone(client_timezone)
             local_date = now.astimezone(client_zone).date().isoformat()
             pending = self._pending_drafts(tx, owner, pending_ids)
+            if not _salary_enabled(self.ledger, owner):
+                pending = [draft for draft in pending if draft.fields.category != "salary"]
             context = self._conversation_context(history, pending)
             classification = self.model.call_function(
                 "Route this message in any language (Vietnamese with/without accents, English, etc.). "
@@ -173,6 +188,14 @@ class ChatService:
         self, tx: LedgerSession, written: list[str], owner: str, text: str, now: datetime,
         client_zone: ZoneInfo = LOCAL_ZONE,
     ) -> LedgerResult:
+        salary_enabled = _salary_enabled(self.ledger, owner)
+        if not salary_enabled and _SALARY_TERMS.search(text):
+            message = "Salary details are hidden. Enable salary mode in Settings to continue."
+            return LedgerResult({
+                "kind": "intake", "proposals": [],
+                "errors": [{"index": 0, "error": "Salary mode is disabled"}],
+                "message": message,
+            }, 200)
         local_date = now.astimezone(client_zone).date().isoformat()
         parsed = self.model.call_function(
             "Extract each independent income or expense from this message into separate items. "
@@ -191,9 +214,11 @@ class ChatService:
             "'18:00') into strict 24-hour HH:MM format; leave empty string if no clock number was stated. "
             "Assign each item exactly one category from: food_drink (ăn uống), transport (đi lại), "
             "bills (hoá đơn, điện nước, internet), shopping (mua sắm), entertainment (giải trí), "
-            "housing (nhà ở, thuê nhà), income (mọi khoản thu), other (không rõ). "
+            "housing (nhà ở, thuê nhà), income (mọi khoản thu), "
+            + ("salary (lương), " if salary_enabled else "") +
+            "other (không rõ). "
             "No confirmation, no SQL, no write action. Message: " + text,
-            "parse_transactions", _INTAKE_FIELDS,
+            "parse_transactions", _intake_fields(salary_enabled),
         )
         items = parsed.get("items")
         if not isinstance(items, list) or not 1 <= len(items) <= 10:
@@ -201,7 +226,7 @@ class ChatService:
         record_step(
             "Extract transaction fields",
             f"Gemini returned {len(items)} structured item(s).",
-            data={"itemCount": len(items), "items": items},
+            data={"itemCount": len(items)},
         )
         proposals: list[dict[str, object]] = []
         errors: list[dict[str, object]] = []
@@ -257,7 +282,7 @@ class ChatService:
             "chiều, tối or empty; 'occurredTime' is an explicit clock in 24-hour HH:MM or empty (e.g. "
             "'tối qua 7h' -> period 'tối', occurredTime '19:00'). Keep an existing explicit time unless the "
             f"message changes it. Use canonical integer VND digits for amount. {context}Message: " + text,
-            "revise_draft", _REVISE_FIELDS,
+            "revise_draft", _revise_fields(_salary_enabled(self.ledger, owner)),
         )
         proposal_id = revised.get("proposalId")
         target = next((draft for draft in pending if draft.id == proposal_id), None)
@@ -285,52 +310,96 @@ class ChatService:
         client_zone: ZoneInfo = LOCAL_ZONE,
     ) -> LedgerResult:
         local_date = now.astimezone(client_zone).date().isoformat()
-        match = self.model.call_function(
-            "The owner wants to edit, delete or undo a past transaction. The message can be in any language. "
-            "Identify the operation and enough of the description to find it among their own transactions. "
-            f"For matchDate, resolve to YYYY-MM-DD based on today's date {local_date} if a "
-            "relative date (hôm nay, yesterday, etc.) or specific date was mentioned; empty string if the "
-            "owner did not say a date. Message: " + text,
-            "match_transaction", _CHANGE_MATCH_FIELDS,
-        )
-        operation = match.get("operation")
-        if operation not in ("edit", "delete", "undo"):
-            raise InvalidProposal("Gemini must select edit, delete or undo")
-        record_step("Identify requested change", f"Gemini selected {operation}.", data={"operation": operation})
-        match_description, match_date_text = match.get("matchDescription"), match.get("matchDate")
-        if not isinstance(match_description, str) or not isinstance(match_date_text, str):
-            raise InvalidProposal("Match fields must be text")
-        match_date: date | None = None
-        if match_date_text:
-            try:
-                match_date = parse_transaction_date(match_date_text, now, zone=client_zone)
-            except InvalidTransactionTime:
-                match_date = None
-        candidates = [
-            t for t in self.ledger.store.list_transactions(owner)
-            if not t.deleted
-            and (not match_description or match_description.casefold() in t.fields.description.casefold())
-            and (match_date is None or t.fields.occurred.occurred_date == match_date)
-        ]
-        record_step(
-            "Find matching transactions",
-            f"Found {len(candidates)} matching transaction(s) in this account.",
-            data={"matchCount": len(candidates)},
-        )
-        if not candidates:
+        available = [t for t in self.ledger.store.list_transactions(owner) if not t.deleted]
+        if not available:
             return LedgerResult({
                 "kind": "needs_selection", "candidates": [],
                 "message": "Không tìm thấy giao dịch phù hợp. Hãy mô tả cụ thể hơn hoặc sửa trực tiếp ở "
                            "trang Transactions.",
             }, 200)
-        if len(candidates) > 1:
-            shown = candidates[:5]
+        by_id = {t.id: t for t in available}
+        candidate_data = [
+            {
+                "id": t.id,
+                "amount": str(t.fields.money.amount) if t.fields.money else "",
+                "currency": t.fields.money.currency if t.fields.money else "",
+                "date": t.fields.occurred.occurred_date.isoformat() if t.fields.occurred.occurred_date else "",
+                "time": t.fields.occurred.occurred_time.strftime("%H:%M") if t.fields.occurred.occurred_time else "",
+                "direction": t.fields.direction,
+                "category": t.fields.category,
+                "description": t.fields.description,
+            }
+            for t in available
+        ]
+        change_fields: dict[str, object] = {
+            "type": "OBJECT", "properties": {
+                "operation": {"type": "STRING", "enum": ["edit", "delete", "undo"]},
+                "targetId": {"type": "STRING", "enum": ["", *by_id.keys()]},
+                "matchDescription": {"type": "STRING"},
+                "matchDate": {"type": "STRING"},
+            }, "required": ["operation"],
+        }
+        match = self.model.call_function(
+            "The owner wants to edit, delete or undo one of their saved transactions. The request may be in "
+            "Vietnamese or English, while transaction descriptions may use another language. Match by meaning, "
+            "not by literal substring. Resolve relative dates such as hôm nay/today against " + local_date + ". "
+            "Choose the exact id from the candidate list. If no candidate clearly matches, return an empty id. "
+            "Never invent or alter an id. Candidates: " + json.dumps(candidate_data, ensure_ascii=False) +
+            ". Owner's request: " + text,
+            "match_transaction", change_fields,
+        )
+        operation = match.get("operation")
+        if operation not in ("edit", "delete", "undo"):
+            raise InvalidProposal("Gemini must select edit, delete or undo")
+        record_step("Identify requested change", f"Gemini selected {operation}.", data={"operation": operation})
+        target_id = match.get("targetId")
+        target_candidate = by_id.get(target_id) if isinstance(target_id, str) else None
+        if target_candidate is not None:
+            matching_candidates = [target_candidate]
+        else:
+            match_description = match.get("matchDescription")
+            match_date_text = match.get("matchDate")
+            has_legacy_desc = isinstance(match_description, str) and bool(match_description.strip())
+            has_legacy_date = isinstance(match_date_text, str) and bool(match_date_text.strip())
+            if not has_legacy_desc and not has_legacy_date:
+                matching_candidates = []
+            else:
+                if (match_description is not None and not isinstance(match_description, str)) or (
+                    match_date_text is not None and not isinstance(match_date_text, str)
+                ):
+                    raise InvalidProposal("Match fields must be text")
+                clean_desc = match_description.strip() if isinstance(match_description, str) else ""
+                clean_date_text = match_date_text.strip() if isinstance(match_date_text, str) else ""
+                match_date: date | None = None
+                if clean_date_text:
+                    try:
+                        match_date = parse_transaction_date(clean_date_text, now, zone=client_zone)
+                    except InvalidTransactionTime:
+                        match_date = None
+                matching_candidates = [
+                    t for t in available
+                    if (not clean_desc or clean_desc.casefold() in t.fields.description.casefold())
+                    and (match_date is None or t.fields.occurred.occurred_date == match_date)
+                ]
+        record_step(
+            "Find matching transactions",
+            f"Found {len(matching_candidates)} matching transaction(s) in this account.",
+            data={"matchCount": len(matching_candidates)},
+        )
+        if not matching_candidates:
+            return LedgerResult({
+                "kind": "needs_selection", "candidates": [],
+                "message": "Không tìm thấy giao dịch phù hợp. Hãy mô tả cụ thể hơn hoặc sửa trực tiếp ở "
+                           "trang Transactions.",
+            }, 200)
+        if len(matching_candidates) > 1:
+            shown = matching_candidates[:5]
             return LedgerResult({
                 "kind": "needs_selection", "operation": operation,
                 "candidates": [transaction_view(item) for item in shown],
-                "message": f"Có {len(candidates)} giao dịch khớp; hãy chọn đúng khoản muốn {operation}.",
+                "message": f"Có {len(matching_candidates)} giao dịch khớp; hãy chọn đúng khoản muốn {operation}.",
             }, 200)
-        target = candidates[0]
+        target = matching_candidates[0]
         body: dict[str, object] = {"operation": operation, "targetId": target.id,
                                    "expectedVersion": target.version, "evidenceText": text}
         if operation == "edit":
@@ -339,7 +408,7 @@ class ChatService:
                 "Apply the owner's requested edit to this transaction, keeping every field the owner did "
                 "not ask to change exactly as it is now. Current transaction: " +
                 json.dumps(current, ensure_ascii=False) + ". Message: " + text,
-                "edit_transaction", _ITEM,
+                "edit_transaction", _item_fields(_salary_enabled(self.ledger, owner)),
             )
             if not isinstance(edited, dict) or set(edited) != _ITEM_KEYS:
                 raise InvalidProposal("Missing or unexpected edit fields")

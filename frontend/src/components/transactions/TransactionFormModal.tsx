@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Category } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/api";
 import { useEscapeKey } from "@/lib/use-escape-key";
+import { useAuth } from "@/lib/auth-context";
 
 export type TransactionFormValues = {
   amount: string;
@@ -32,6 +33,7 @@ export function TransactionFormModal({
   onCancel: () => void;
   onSave: (values: TransactionFormValues) => Promise<void>;
 }) {
+  const { salaryModeEnabled } = useAuth();
   const [description, setDescription] = useState(initial.description);
   const [amount, setAmount] = useState(initial.amount);
   const [direction, setDirection] = useState<"income" | "expense">(initial.direction);
@@ -104,7 +106,7 @@ export function TransactionFormModal({
             onChange={(e) => setCategory(e.target.value as Category)}
             className="text-sm border border-border-input rounded-[10px] px-3.5 min-h-11 bg-transparent outline-none transition-colors duration-150 focus:border-accent"
           >
-            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+            {Object.entries(CATEGORY_LABELS).filter(([value]) => value !== "salary" || salaryModeEnabled).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>

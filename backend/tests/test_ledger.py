@@ -61,7 +61,7 @@ def ledger_client(tmp_path: Path) -> Iterator[tuple[FlaskClient, str, FlaskClien
         ledger = LedgerService(PostgresLedgerStore(engine), LocalEvidenceStore(tmp_path))
         history = HistoryService(PostgresHistoryStore(engine), ledger.store)
         model = FakeChatModel()
-        app = create_app(auth, ledger=ledger, chat=ChatService(model, ledger, history), history=history)
+        app = create_app(auth, ledger=ledger, chat=ChatService(model, ledger, history), history=history, engine=engine)
         app.extensions["test_chat_model"] = model
         client = app.test_client()
         response = client.post("/api/auth/login", json={"username": "owner", "password": "long-owner-password-123"})
@@ -493,6 +493,48 @@ def test_chat_change_multiple_matches_lists_candidates(
     assert len(response.json["candidates"]) == 2
 
 
+def test_chat_change_lone_transaction_unmatched_fails_closed_without_proposal(
+    ledger_client: tuple[FlaskClient, str, FlaskClient, str],
+) -> None:
+    client, csrf, _, _ = ledger_client
+    # There is only a single transaction in this account
+    _, identifier = create_and_confirm(client, csrf)
+    model = chat_model(client)
+
+    # 1. Model response omits targetId and provides no legacy description/date
+    model.responses = {
+        "route_message": {"specialist": "change", "date": ""},
+        "match_transaction": {"operation": "delete"},
+    }
+    res_omitted = chat_post(client, csrf, "Xóa giao dịch không liên quan")
+    assert res_omitted.status_code == 200
+    assert res_omitted.json["kind"] == "needs_selection" and res_omitted.json["candidates"] == []
+    assert client.get("/api/proposals").json["items"] == []
+    assert client.get(f"/api/transactions/{identifier}").json["deleted"] is False
+
+    # 2. Model response returns an unknown targetId not in candidate map
+    model.responses = {
+        "route_message": {"specialist": "change", "date": ""},
+        "match_transaction": {"operation": "delete", "targetId": "unknown-nonexistent-id"},
+    }
+    res_unknown = chat_post(client, csrf, "Xóa giao dịch mua xe hơi")
+    assert res_unknown.status_code == 200
+    assert res_unknown.json["kind"] == "needs_selection" and res_unknown.json["candidates"] == []
+    assert client.get("/api/proposals").json["items"] == []
+    assert client.get(f"/api/transactions/{identifier}").json["deleted"] is False
+
+    # 3. Model response returns empty targetId with no legacy description
+    model.responses = {
+        "route_message": {"specialist": "change", "date": ""},
+        "match_transaction": {"operation": "delete", "targetId": ""},
+    }
+    res_empty = chat_post(client, csrf, "Xóa gì đó")
+    assert res_empty.status_code == 200
+    assert res_empty.json["kind"] == "needs_selection" and res_empty.json["candidates"] == []
+    assert client.get("/api/proposals").json["items"] == []
+    assert client.get(f"/api/transactions/{identifier}").json["deleted"] is False
+
+
 def test_chat_follow_up_revises_pending_draft(ledger_client: tuple[FlaskClient, str, FlaskClient, str]) -> None:
     client, csrf, other, other_csrf = ledger_client
     model = chat_model(client)
@@ -813,3 +855,256 @@ def test_chat_message_with_client_timezone_and_debug_trace_data(
     assert len(agg_steps) == 1
     assert "totals" in agg_steps[0]["data"]
     assert agg_steps[0]["data"]["totals"]["expense"] == "17500"
+
+
+def test_salary_mode_toggle_and_privacy_filtering(
+    ledger_client: tuple[FlaskClient, str, FlaskClient, str],
+) -> None:
+    client, csrf, _, _ = ledger_client
+
+    # Initially salary mode is disabled
+    me_resp = client.get("/api/auth/me")
+    assert me_resp.status_code == 200
+    assert me_resp.json["salaryModeEnabled"] is False
+
+    # Creating a salary proposal while disabled must fail
+    fail_prop = client.post(
+        "/api/proposals",
+        json={
+            "expectedVersion": 0, "amount": "50000000", "currency": "VND", "direction": "income",
+            "category": "salary", "description": "Lương tháng 11", "occurredDate": "2026-11-05",
+            "occurredTime": "09:00", "evidenceText": "Payroll",
+        },
+        headers=headers(csrf),
+    )
+    assert fail_prop.status_code == 400
+
+    # Enable salary mode
+    enable_resp = client.put("/api/settings/salary-mode", json={"enabled": True}, headers=headers(csrf))
+    assert enable_resp.status_code == 200 and enable_resp.json == {"salaryModeEnabled": True}
+    assert client.get("/api/auth/me").json["salaryModeEnabled"] is True
+
+    # Now create and confirm salary transaction
+    salary_prop = client.post(
+        "/api/proposals",
+        json={
+            "expectedVersion": 0, "amount": "50000000", "currency": "VND", "direction": "income",
+            "category": "salary", "description": "Lương tháng 11", "occurredDate": "2026-11-05",
+            "occurredTime": "09:00", "evidenceText": "Payroll",
+        },
+        headers=headers(csrf),
+    )
+    assert salary_prop.status_code == 201
+    salary_prop_id = salary_prop.json["id"]
+    prop_details = client.get(f"/api/proposals/{salary_prop_id}")
+    assert prop_details.status_code == 200
+    evidence_ids = prop_details.json["evidenceIds"]
+    assert len(evidence_ids) >= 1
+    evidence_id = evidence_ids[0]
+
+    # Create an open salary draft to test proposal list filtering
+    open_draft = client.post(
+        "/api/proposals",
+        json={
+            "expectedVersion": 0, "amount": "10000000", "currency": "VND", "direction": "income",
+            "category": "salary", "description": "Thưởng tết", "occurredDate": "2026-11-06",
+            "occurredTime": "10:00", "evidenceText": "Bonus",
+        },
+        headers=headers(csrf),
+    )
+    assert open_draft.status_code == 201
+    salary_draft_id = open_draft.json["id"]
+
+    confirm_resp = client.post(
+        f"/api/proposals/{salary_prop_id}/confirm",
+        json={"expectedVersion": 1},
+        headers=headers(csrf),
+    )
+    assert confirm_resp.status_code == 200
+    salary_tx_id = confirm_resp.json["transaction"]["id"]
+
+    # Also perform a salary chat exchange
+    model = chat_model(client)
+    model.responses = {
+        "route_message": {"specialist": "qa", "date": ""},
+        "answer_finance": {"answer": "Lương tháng 11 là 50 triệu."},
+    }
+    chat_resp = client.post(
+        "/api/chat/messages",
+        json={"text": "Lương tháng 11 bao nhiêu?", "expectedVersion": 0},
+        headers=headers(csrf),
+    )
+    assert chat_resp.status_code == 200
+    salary_chat_id = chat_resp.json["chatId"]
+
+    # While enabled: visible in proposals, evidence, transactions, details, chats, reports
+    assert client.get(f"/api/proposals/{salary_prop_id}").status_code == 200
+    assert client.get(f"/api/proposals/{salary_draft_id}").status_code == 200
+    assert any(p["id"] == salary_draft_id for p in client.get("/api/proposals").json["items"])
+    evidence_resp = client.get(f"/api/evidence/{evidence_id}")
+    assert evidence_resp.status_code == 200 and "Payroll" in evidence_resp.text
+    assert client.get(f"/api/transactions/{salary_tx_id}").status_code == 200
+    assert any(t["id"] == salary_tx_id for t in client.get("/api/transactions").json["items"])
+    assert any(c["id"] == salary_chat_id for c in client.get("/api/chats").json["items"])
+    summary = client.get("/api/reports/summary?months=1").json
+    assert summary["totals"]["income"] == "50000000"
+
+    # Disable salary mode
+    disable_resp = client.put("/api/settings/salary-mode", json={"enabled": False}, headers=headers(csrf))
+    assert disable_resp.status_code == 200 and disable_resp.json == {"salaryModeEnabled": False}
+    assert client.get("/api/auth/me").json["salaryModeEnabled"] is False
+
+    # While disabled: hidden in proposals, evidence, transactions, details, chats, reports
+    assert client.get(f"/api/proposals/{salary_prop_id}").status_code == 404
+    assert client.get(f"/api/proposals/{salary_draft_id}").status_code == 404
+    assert not any(p["id"] == salary_draft_id for p in client.get("/api/proposals").json["items"])
+    assert not any(p["id"] == salary_prop_id for p in client.get("/api/proposals").json["items"])
+    assert client.get(f"/api/evidence/{evidence_id}").status_code == 404
+    assert client.get(f"/api/transactions/{salary_tx_id}").status_code == 404
+    assert not any(t["id"] == salary_tx_id for t in client.get("/api/transactions").json["items"])
+    assert not any(c["id"] == salary_chat_id for c in client.get("/api/chats").json["items"])
+    summary_disabled = client.get("/api/reports/summary?months=1").json
+    assert summary_disabled["totals"]["income"] == "0"
+
+    # Re-enable salary mode: everything is restored
+    client.put("/api/settings/salary-mode", json={"enabled": True}, headers=headers(csrf))
+    assert client.get(f"/api/proposals/{salary_prop_id}").status_code == 200
+    assert client.get(f"/api/proposals/{salary_draft_id}").status_code == 200
+    assert any(p["id"] == salary_draft_id for p in client.get("/api/proposals").json["items"])
+    assert client.get(f"/api/evidence/{evidence_id}").status_code == 200
+    assert client.get(f"/api/transactions/{salary_tx_id}").status_code == 200
+    assert any(t["id"] == salary_tx_id for t in client.get("/api/transactions").json["items"])
+    assert any(c["id"] == salary_chat_id for c in client.get("/api/chats").json["items"])
+    summary_reopened = client.get("/api/reports/summary?months=1").json
+    assert summary_reopened["totals"]["income"] == "50000000"
+
+
+def test_telegram_semantic_vietnamese_deletion_of_english_transaction(
+    ledger_client: tuple[FlaskClient, str, FlaskClient, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, csrf, _, _ = ledger_client
+
+    # Create an income transaction with English description
+    proposed = client.post(
+        "/api/proposals",
+        json={
+            "expectedVersion": 0, "amount": "500000", "currency": "VND", "direction": "income",
+            "category": "income", "description": "My mom gave me 500k", "occurredDate": "2026-11-20",
+            "occurredTime": "10:00", "evidenceText": "Mom sent 500k",
+        },
+        headers=headers(csrf),
+    )
+    assert proposed.status_code == 201
+    confirm_res = client.post(
+        f"/api/proposals/{proposed.json['id']}/confirm",
+        json={"expectedVersion": 1},
+        headers=headers(csrf),
+    )
+    assert confirm_res.status_code == 200
+    target_tx_id = confirm_res.json["transaction"]["id"]
+    assert client.get(f"/api/transactions/{target_tx_id}").json["deleted"] is False
+
+    # Mock Telegram API calls via httpx.post
+    sent_messages: list[dict[str, object]] = []
+    registered_webhook_secret = {"value": ""}
+
+    def fake_httpx_post(url: str, json: dict[str, object] | None = None, **kwargs: object) -> object:
+        from unittest.mock import MagicMock
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        if url.endswith("/getMe"):
+            resp.json.return_value = {"ok": True, "result": {"id": 12345, "username": "buck_test_bot"}}
+        elif url.endswith("/setWebhook"):
+            registered_webhook_secret["value"] = str((json or {}).get("secret_token", ""))
+            resp.json.return_value = {"ok": True, "result": True}
+        elif url.endswith("/sendMessage"):
+            sent_messages.append(json or {})
+            resp.json.return_value = {"ok": True, "result": {"message_id": len(sent_messages)}}
+        else:
+            resp.json.return_value = {"ok": True, "result": {}}
+        return resp
+
+    import httpx
+    monkeypatch.setattr(httpx, "post", fake_httpx_post)
+
+    # 1. Connect bot in settings
+    conn_res = client.post(
+        "/api/settings/telegram",
+        json={"botToken": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz12345678"},
+        headers=headers(csrf),
+    )
+    assert conn_res.status_code == 201
+    pairing_code = conn_res.json["pairingCode"]
+    webhook_secret = registered_webhook_secret["value"]
+    assert webhook_secret
+
+    # 2. Pair Telegram chat via webhook /connect command
+    pair_res = client.post(
+        "/api/integrations/telegram/webhook",
+        headers={"X-Telegram-Bot-Api-Secret-Token": webhook_secret},
+        json={
+            "update_id": 100,
+            "message": {
+                "message_id": 1,
+                "chat": {"id": 888999, "type": "private"},
+                "text": f"/connect {pairing_code}",
+            },
+        },
+    )
+    assert pair_res.status_code == 200
+    assert any("Telegram is connected" in str(m.get("text", "")) for m in sent_messages)
+
+    # 3. User sends Vietnamese semantic deletion request: "Xóa giao dịch mẹ cho 500k"
+    model = chat_model(client)
+    model.responses = {
+        "route_message": {"specialist": "change", "date": ""},
+        "match_transaction": {"operation": "delete", "targetId": target_tx_id},
+    }
+
+    del_req = client.post(
+        "/api/integrations/telegram/webhook",
+        headers={"X-Telegram-Bot-Api-Secret-Token": webhook_secret},
+        json={
+            "update_id": 101,
+            "message": {
+                "message_id": 2,
+                "chat": {"id": 888999, "type": "private"},
+                "text": "Xóa giao dịch mẹ cho 500k",
+            },
+        },
+    )
+    assert del_req.status_code == 200
+
+    # Verify a delete proposal draft preview was sent to Telegram with /c_ command
+    draft_previews = [str(m.get("text", "")) for m in sent_messages if "Confirm: /c_" in str(m.get("text", ""))]
+    assert len(draft_previews) >= 1
+    preview_text = draft_previews[-1]
+    assert "My mom gave me 500k" in preview_text
+
+    # Extract the confirm command (e.g. /c_...)
+    import re
+    match_cmd = re.search(r"(/c_[a-z0-9A-Z]+)", preview_text)
+    assert match_cmd is not None
+    confirm_command = match_cmd.group(1)
+
+    # 4. Confirm the deletion via Telegram command
+    confirm_tg = client.post(
+        "/api/integrations/telegram/webhook",
+        headers={"X-Telegram-Bot-Api-Secret-Token": webhook_secret},
+        json={
+            "update_id": 102,
+            "message": {
+                "message_id": 3,
+                "chat": {"id": 888999, "type": "private"},
+                "text": confirm_command,
+            },
+        },
+    )
+    assert confirm_tg.status_code == 200
+    assert any("Transaction confirmed." in str(m.get("text", "")) for m in sent_messages)
+
+    # Verify transaction is now deleted in database
+    tx_status = client.get(f"/api/transactions/{target_tx_id}")
+    assert tx_status.status_code == 200
+    assert tx_status.json["deleted"] is True

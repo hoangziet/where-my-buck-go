@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { username, invalidate } = useAuth();
+  const { username, invalidate, salaryModeEnabled, setSalaryModeEnabled } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -19,6 +19,20 @@ export default function SettingsPage() {
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [telegramError, setTelegramError] = useState<string | null>(null);
   const [telegramBusy, setTelegramBusy] = useState(false);
+  const [salaryBusy, setSalaryBusy] = useState(false);
+  const [salaryError, setSalaryError] = useState<string | null>(null);
+
+  async function handleSalaryModeChange(enabled: boolean) {
+    setSalaryBusy(true);
+    setSalaryError(null);
+    try {
+      await setSalaryModeEnabled(enabled);
+    } catch (err) {
+      setSalaryError(err instanceof ApiError ? err.message : "Could not update salary privacy settings.");
+    } finally {
+      setSalaryBusy(false);
+    }
+  }
 
   useEffect(() => {
     api.getTelegramConnection().then(setTelegram).catch((err: unknown) => {
@@ -95,6 +109,22 @@ export default function SettingsPage() {
         <h1 className="m-0 font-display font-semibold text-[32px] tracking-tight">Settings</h1>
         <span className="text-sm text-muted">Signed in as {username}</span>
       </div>
+
+      <section className="bg-surface border border-border rounded-2xl p-6 flex flex-col gap-4 max-w-[520px]">
+        <div>
+          <h2 className="m-0 text-base font-semibold">Salary privacy</h2>
+          <p className="mt-1 mb-0 text-sm text-muted">
+            Salary details stay hidden across the app until you enable salary mode. Turn it off any time to hide them again.
+          </p>
+        </div>
+        <label className="flex items-center justify-between gap-4 cursor-pointer">
+          <span className="text-sm font-medium">Enable salary mode</span>
+          <input type="checkbox" role="switch" aria-label="Enable salary mode" checked={salaryModeEnabled}
+            disabled={salaryBusy} onChange={(event) => void handleSalaryModeChange(event.target.checked)}
+            className="size-5 accent-accent" />
+        </label>
+        {salaryError && <p role="alert" className="m-0 text-sm text-danger">{salaryError}</p>}
+      </section>
 
       <form
         onSubmit={handleSubmit}

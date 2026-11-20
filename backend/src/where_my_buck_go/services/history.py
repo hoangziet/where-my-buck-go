@@ -1,11 +1,19 @@
 """Chat history and pinned Q&A ranges; display-only, never consulted for business rules."""
 
+import json
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Protocol
 from uuid import uuid4
 
 from where_my_buck_go.services.ledger import LedgerStore
+
+_SALARY_TERMS = re.compile(
+    r"\b(?:salary|salaries|payroll|paycheck|paychecks|payslip|wage|wages|compensation|take.home)\b|"
+    r"lương|luong|tiền lương",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -81,15 +89,48 @@ class HistoryService:
             self.store.append_message(owner, chat_id, "assistant", assistant_text[:2000], now, debug_trace)
 
     def chats(self, owner: str) -> list[dict[str, object]]:
+        hidden_chat_ids = self._salary_chat_ids(owner)
         return [{"id": item.id, "title": item.title, "createdAt": item.created_at.isoformat()}
-                for item in self.store.list_chats(owner)]
+                for item in self.store.list_chats(owner) if item.id not in hidden_chat_ids]
 
     def messages(self, owner: str, chat_id: str) -> list[dict[str, object]] | None:
         if not self.store.chat_exists(owner, chat_id):
             return None
+        messages = self.store.list_messages(owner, chat_id)
+        if not self._salary_mode_enabled(owner):
+            messages = [message for pair in self._message_pairs(messages) if not self._salary_pair(pair)
+                        for message in pair]
         return [{"role": item.role, "text": item.text, "createdAt": item.created_at.isoformat(),
                  "debugTrace": item.debug_trace, "evidenceId": item.evidence_id}
-                for item in self.store.list_messages(owner, chat_id)]
+                for item in messages]
+
+    def _salary_mode_enabled(self, owner: str) -> bool:
+        checker = getattr(self.ledger_store, "salary_mode_enabled", None)
+        return bool(checker(owner)) if callable(checker) else False
+
+    def _salary_chat_ids(self, owner: str) -> set[str]:
+        if self._salary_mode_enabled(owner):
+            return set()
+        return {chat.id for chat in self.store.list_chats(owner)
+                if any(self._salary_pair(pair) for pair in self._message_pairs(
+                    self.store.list_messages(owner, chat.id),
+                ))}
+
+    @staticmethod
+    def _message_pairs(messages: list[MessageRecord]) -> list[list[MessageRecord]]:
+        return [messages[index:index + 2] for index in range(0, len(messages), 2)]
+
+    @staticmethod
+    def _salary_pair(messages: list[MessageRecord]) -> bool:
+        for message in messages:
+            if _SALARY_TERMS.search(message.text):
+                return True
+            for entry in message.debug_trace or []:
+                if entry.get("kind") != "sql":
+                    step_text = json.dumps(entry, ensure_ascii=False)
+                    if _SALARY_TERMS.search(step_text):
+                        return True
+        return False
 
     def pin(self, owner: str, title: str, start: date, end: date, now: datetime) -> dict[str, object]:
         pin_id = str(uuid4())
@@ -97,8 +138,10 @@ class HistoryService:
         return self._pin_view(owner, pin_id, title.strip()[:80] or "Pinned", start, end)
 
     def pins(self, owner: str) -> list[dict[str, object]]:
-        return [self._pin_view(owner, item.id, item.title, item.start_date, item.end_date)
-                for item in self.store.list_pins(owner)]
+        pins = self.store.list_pins(owner)
+        if not self._salary_mode_enabled(owner):
+            pins = [item for item in pins if not _SALARY_TERMS.search(item.title)]
+        return [self._pin_view(owner, item.id, item.title, item.start_date, item.end_date) for item in pins]
 
     def unpin(self, owner: str, pin_id: str) -> bool:
         return self.store.delete_pin(owner, pin_id)
