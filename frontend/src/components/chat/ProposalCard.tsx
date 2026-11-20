@@ -6,6 +6,7 @@ import { appLocalISODate, formatNumber } from "@/lib/format";
 import type { Category, DraftFields, ProposalDto } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/api";
 import { isEditableDraft, type ConfirmState } from "./messages";
+import { useAuth } from "@/lib/auth-context";
 
 const DRAFT_FIELD = "min-w-0 border border-border-input rounded-[10px] bg-surface px-2.5 min-h-10 text-ink outline-none transition-colors duration-150 focus:border-accent";
 
@@ -22,6 +23,7 @@ export function ProposalCard({
   onConfirm: (edits: DraftFields | null) => void;
   onDiscard: () => void;
 }) {
+  const { salaryModeEnabled } = useAuth();
   // After a failed confirm the owner can still fix the fields and try again.
   const showActions = !state || state === "error";
   const editable = showActions && isEditableDraft(proposal);
@@ -39,6 +41,12 @@ export function ProposalCard({
   const canConfirm = editable ? validAmount && occurredDate !== "" && description.trim() !== "" : proposal.canConfirm;
   const sign = direction === "income" ? "+" : "−";
   const today = appLocalISODate(new Date());
+
+  if (proposal.category === "salary" && !salaryModeEnabled) {
+    return <aside className="rounded-xl border border-border-row bg-surface px-4 py-3 text-sm text-muted">
+      Salary draft hidden. Enable salary mode in Settings to view it.
+    </aside>;
+  }
 
   function confirm() {
     if (!dirty) {
@@ -107,7 +115,7 @@ export function ProposalCard({
             {editable ? (
               <select id={`draft-cat-${proposal.id}`} value={category}
                 onChange={(e) => setCategory(e.target.value as Category)} className={DRAFT_INPUT}>
-                {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                {Object.entries(CATEGORY_LABELS).filter(([value]) => value !== "salary" || salaryModeEnabled).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>

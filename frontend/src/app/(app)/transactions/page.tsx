@@ -6,6 +6,7 @@ import { appLocalISODate, appLocalTime, formatVND } from "@/lib/format";
 import * as api from "@/lib/api";
 import type { TransactionDto } from "@/lib/api";
 import { ApiError, CATEGORY_LABELS, TRANSACTIONS_PAGE_LIMIT } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { TransactionFormModal, type TransactionFormValues } from "@/components/transactions/TransactionFormModal";
 import { EvidenceModal } from "@/components/transactions/EvidenceModal";
 import { TransactionDetailsModal } from "@/components/transactions/TransactionDetailsModal";
@@ -31,6 +32,7 @@ import {
 } from "@/components/transactions/table";
 
 export default function TransactionsPage() {
+  const { salaryModeEnabled } = useAuth();
   const today = appLocalISODate(new Date());
   const [calendarMonth, setCalendarMonth] = useState(today.slice(0, 7));
   const [calendarView, setCalendarView] = useState(false);
@@ -307,7 +309,7 @@ export default function TransactionsPage() {
             className="shrink-0 text-[13px] bg-surface border border-border-input rounded-full px-3.5 min-h-9 cursor-pointer"
           >
             <option value="all">Category</option>
-            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+            {Object.entries(CATEGORY_LABELS).filter(([value]) => value !== "salary" || salaryModeEnabled).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
@@ -381,7 +383,7 @@ export default function TransactionsPage() {
             className="appearance-none flex items-center gap-2 bg-surface border border-border-input rounded-[10px] pl-3.5 pr-8 min-h-11 text-sm cursor-pointer"
           >
             <option value="all">All categories</option>
-            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+            {Object.entries(CATEGORY_LABELS).filter(([value]) => value !== "salary" || salaryModeEnabled).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>

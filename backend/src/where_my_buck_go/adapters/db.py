@@ -32,6 +32,7 @@ users = Table(
     Column("username", String(128), nullable=False, unique=True),
     Column("password_hash", String(512), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("salary_mode_enabled", Boolean, nullable=False, default=False, server_default="false"),
 )
 
 sessions = Table(

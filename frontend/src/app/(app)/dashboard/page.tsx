@@ -19,6 +19,7 @@ const CATEGORY_COLORS: Record<Category, string> = {
   transport: "#A9D3B8",
   entertainment: "#D5E9DC",
   income: "#8FD3AA",
+  salary: "#4A8D68",
   other: "#C9CEC9",
 };
 

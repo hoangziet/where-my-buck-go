@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, MessageCircle, Receipt, Database, Check, Bookmark, History } from "lucide-react";
+import { ArrowRight, MessageCircle, Receipt, Database, Check, Bookmark, History, ShieldCheck } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
 import { LandingActions } from "@/components/landing/LandingActions";
 import { ReportPreview } from "@/components/landing/ReportPreview";
@@ -63,9 +63,10 @@ export default function LandingPage() {
 
       <section
         id="top"
-        className="max-w-[1200px] mx-auto px-5 sm:px-8 py-18 pb-24 grid items-center gap-12 lg:gap-16"
+        className="relative isolate max-w-[1200px] mx-auto px-5 sm:px-8 py-18 pb-24 grid items-center gap-12 lg:gap-16"
         style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))" }}
       >
+        <div aria-hidden="true" className="pointer-events-none absolute -z-10 right-0 top-8 h-[480px] w-[58%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(143,211,170,0.2),transparent_68%)]" />
         <div className="flex flex-col items-start gap-7">
           <p className="m-0 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-accent-strong">
             <span className="h-px w-8 bg-accent" /> Money clarity starts here
@@ -87,6 +88,9 @@ export default function LandingPage() {
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border-row pt-5 text-[13px] text-ink-3">
             <span>One conversation</span><span>Every draft reviewed</span><span>Queries you can inspect</span>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-accent-soft-border bg-accent-soft-bg px-3 py-2 text-xs font-medium text-accent-strong">
+            <ShieldCheck size={15} strokeWidth={1.8} /> Private by design · Your confirmation always comes first
           </div>
         </div>
 

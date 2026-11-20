@@ -193,7 +193,7 @@ def test_http_cookie_csrf_permissions_and_revocation(setup: tuple[AuthService, M
     assert "HttpOnly" in response.headers.getlist("Set-Cookie")[0]
     assert "SameSite=Strict" in response.headers.getlist("Set-Cookie")[0]
     assert response.headers["Cache-Control"] == "no-store"
-    assert client.get("/api/auth/me").json == {"username": "owner"}
+    assert client.get("/api/auth/me").json == {"username": "owner", "salaryModeEnabled": False}
     assert client.post("/api/auth/login", json={"username": "owner", "password": "bad"}).status_code == 403
     assert client.post("/api/auth/logout").status_code == 403
     assert client.post("/api/auth/logout", headers={"X-CSRF-Token": "wrong"}).status_code == 403

@@ -50,7 +50,7 @@ export function ReportPreview() {
           </span>
         </div>
         <p className="mb-0 mt-4 rounded-xl bg-[#F4F2EC] px-4 py-3 text-sm font-medium text-ink-2">
-          “How much did I spend on food this week?”
+          “How much have I spent on food and drink this week?”
         </p>
         <p className="mb-0 mt-4 text-sm leading-6 text-ink-2">
           This week, you spent <strong className="text-accent-strong">292.000 ₫</strong> on Food &amp; Drink across five transactions.
@@ -89,6 +89,11 @@ export function ReportPreview() {
 
       <dialog
         ref={dialogRef}
+        onClick={(event) => {
+          if (event.target === dialogRef.current) {
+            dialogRef.current.close();
+          }
+        }}
         aria-labelledby="report-query-title"
         className="report-query-dialog overflow-y-auto rounded-[22px] border border-border-row bg-white p-0 text-ink shadow-[0_32px_90px_rgba(0,0,0,0.25)]"
       >

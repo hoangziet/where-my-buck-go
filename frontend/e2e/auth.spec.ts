@@ -181,3 +181,24 @@ test("the brand link opens the landing page, which plays the product demo video"
   expect(response.ok()).toBe(true);
   expect(response.headers()["content-type"]).toContain("video/mp4");
 });
+
+test("landing page displays report preview with natural question and opens query details dialog", async ({ page }) => {
+  await page.goto("/");
+  const preview = page.locator("#reports");
+  await expect(preview).toBeVisible();
+  await expect(preview.getByText("“How much have I spent on food and drink this week?”")).toBeVisible();
+  await expect(preview.getByText("292.000 ₫")).toBeVisible();
+
+  const viewSqlButton = preview.getByRole("button", { name: /View query steps & SQL/i });
+  await expect(viewSqlButton).toBeVisible();
+  await viewSqlButton.click();
+
+  const dialog = page.locator("dialog.report-query-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Query steps & SQL" })).toBeVisible();
+  await expect(dialog.getByText("Classify the spending question")).toBeVisible();
+  await expect(dialog.locator("code").first()).toContainText("SELECT transactions.category");
+
+  await dialog.getByRole("button", { name: "Close query details" }).click();
+  await expect(dialog).not.toBeVisible();
+});

@@ -9,9 +9,11 @@ from where_my_buck_go.domain.transaction_time import TransactionTime, resolve_tr
 
 Direction = Literal["income", "expense"]
 Operation = Literal["create", "edit", "delete", "undo"]
-Category = Literal["food_drink", "transport", "bills", "shopping", "entertainment", "housing", "income", "other"]
+Category = Literal[
+    "food_drink", "transport", "bills", "shopping", "entertainment", "housing", "income", "salary", "other",
+]
 CATEGORIES: tuple[Category, ...] = (
-    "food_drink", "transport", "bills", "shopping", "entertainment", "housing", "income", "other",
+    "food_drink", "transport", "bills", "shopping", "entertainment", "housing", "income", "salary", "other",
 )
 
 
@@ -38,6 +40,8 @@ class LedgerFields:
             raise InvalidProposal("Description must be 1-200 characters")
         if self.category not in CATEGORIES:
             raise InvalidProposal("Category must be one of " + ", ".join(CATEGORIES))
+        if self.category == "salary" and self.direction != "income":
+            raise InvalidProposal("Salary must be an income")
 
 
 @dataclass(frozen=True)
