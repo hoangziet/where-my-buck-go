@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, MessageCircle, Receipt, Database, Check, Bookmark, History, ShieldCheck } from "lucide-react";
-import { LogoMark } from "@/components/Logo";
+import { ArrowRight, MessageCircle, Receipt, Database, Check, Bookmark, History } from "lucide-react";
+import { LandingHeader } from "@/components/landing/LandingHeader";
 import { LandingActions } from "@/components/landing/LandingActions";
 import { ReportPreview } from "@/components/landing/ReportPreview";
 
@@ -46,20 +46,7 @@ const steps = [
 export default function LandingPage() {
   return (
     <div className="landing-page min-h-screen bg-bg text-ink">
-      <header className="sticky top-0 z-30 border-b border-border-row bg-bg/95 backdrop-blur-md">
-        <div className="max-w-[1200px] mx-auto px-5 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
-          <a href="#top" className="flex items-center gap-2.5 no-underline text-ink">
-            <LogoMark size={32} />
-            <span className="font-display font-bold text-lg tracking-tight">Where My Buck Go</span>
-          </a>
-          <nav aria-label="Main" className="flex flex-wrap items-center gap-x-7 gap-y-3 text-[15px]">
-            <a href="#features" className="text-ink-3 no-underline transition-colors duration-150 hover:text-ink">Features</a>
-            <a href="#how" className="text-ink-3 no-underline transition-colors duration-150 hover:text-ink">How it works</a>
-            <a href="#reports" className="text-ink-3 no-underline transition-colors duration-150 hover:text-ink">Reports</a>
-            <LandingActions placement="nav" />
-          </nav>
-        </div>
-      </header>
+      <LandingHeader />
 
       <section
         id="top"
@@ -88,9 +75,6 @@ export default function LandingPage() {
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border-row pt-5 text-[13px] text-ink-3">
             <span>One conversation</span><span>Every draft reviewed</span><span>Queries you can inspect</span>
-          </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-accent-soft-border bg-accent-soft-bg px-3 py-2 text-xs font-medium text-accent-strong">
-            <ShieldCheck size={15} strokeWidth={1.8} /> Private by design · Your confirmation always comes first
           </div>
         </div>
 
@@ -133,6 +117,38 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section aria-labelledby="telegram-title" className="bg-ink text-[#F4F2EC]">
+        <div className="mx-auto grid max-w-[1200px] gap-10 px-5 py-20 sm:px-8 lg:grid-cols-[1fr_0.9fr] lg:items-center lg:gap-16 lg:py-24">
+          <div className="flex flex-col items-start gap-5">
+            <span className="text-[13px] font-semibold uppercase tracking-wide text-[#8FD3AA]">A quicker way to keep a habit</span>
+            <h2 id="telegram-title" className="m-0 max-w-[620px] font-display text-[38px] font-semibold leading-tight tracking-tight sm:text-[44px]">
+              Log an expense from your Telegram chat.
+            </h2>
+            <p className="m-0 max-w-[560px] text-lg leading-7 text-[#C9CEC9]">
+              Connect a personal bot you create with BotFather, pair your private chat, and send expenses as messages. The app prepares a draft for you to review before it is saved.
+            </p>
+            <a href="#start" className="rounded-xl bg-[#8FD3AA] px-5 py-3.5 font-semibold text-ink no-underline transition-colors hover:bg-white">
+              See how to get started
+            </a>
+          </div>
+          <ol className="m-0 grid list-none gap-3 p-0">
+            {[
+              ["01", "Create your bot", "Set up a personal bot with Telegram's BotFather."],
+              ["02", "Connect and pair", "Add its token in Settings and pair your private chat."],
+              ["03", "Send a message", "Review each proposed transaction before confirming it."],
+            ].map(([number, title, body]) => (
+              <li key={number} className="flex gap-4 rounded-2xl border border-white/15 bg-white/[0.04] p-5 sm:p-6">
+                <span className="font-mono text-sm text-[#8FD3AA]">{number}</span>
+                <div className="flex flex-col gap-1.5">
+                  <h3 className="m-0 text-base font-semibold">{title}</h3>
+                  <p className="m-0 text-sm leading-6 text-[#C9CEC9]">{body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
       <section id="how" className="scroll-mt-20 max-w-[1200px] mx-auto px-5 sm:px-8 py-24 flex flex-col gap-12">
         <div className="flex flex-col gap-3.5 max-w-[640px]">
           <span className="text-[13px] font-semibold tracking-wide uppercase text-accent">How it works</span>
@@ -165,15 +181,41 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="max-w-[1200px] mx-auto px-5 sm:px-8 py-28 flex flex-col items-center gap-6 text-center">
+      <section aria-labelledby="privacy-title" className="bg-surface">
+        <div className="mx-auto max-w-[1200px] px-5 py-20 sm:px-8 lg:py-24">
+          <div className="mb-10 max-w-[680px]">
+            <span className="text-[13px] font-semibold uppercase tracking-wide text-accent">Your money stays in your hands</span>
+            <h2 id="privacy-title" className="mb-0 mt-3 font-display text-[38px] font-semibold leading-tight tracking-tight sm:text-[44px]">
+              Clear controls for personal finances.
+            </h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              ["No bank connection", "Your transactions are recorded through messages and the tools you choose to use."],
+              ["You approve every change", "AI suggestions stay drafts until you review and confirm them."],
+              ["Take your records with you", "Export transactions to CSV, delete chats, and manage transactions in the app."],
+            ].map(([title, body]) => (
+              <article key={title} className="rounded-2xl border border-border-row bg-bg p-6 sm:p-7">
+                <h3 className="m-0 text-lg font-semibold">{title}</h3>
+                <p className="mb-0 mt-3 leading-7 text-ink-3">{body}</p>
+              </article>
+            ))}
+          </div>
+          <p className="mb-0 mt-5 text-sm text-muted">
+            For account-data access or deletion requests, see our <Link href="/privacy" className="text-accent-strong underline underline-offset-2">privacy notice</Link>.
+          </p>
+        </div>
+      </section>
+
+      <section id="start" className="max-w-[1200px] mx-auto px-5 sm:px-8 py-28 flex flex-col items-center gap-6 text-center">
         <p className="m-0 text-xs font-semibold uppercase tracking-[0.16em] text-accent">Ready when you are</p>
         <h2
           className="m-0 font-display font-semibold tracking-tight max-w-[760px]"
-          style={{ fontSize: 52, lineHeight: 1.05, letterSpacing: "-0.035em" }}
+          style={{ fontSize: "clamp(34px, 5vw, 52px)", lineHeight: 1.05, letterSpacing: "-0.035em" }}
         >
-          Make more sense of every expense.
+          Start making sense of every expense.
         </h2>
-        <p className="m-0 text-lg text-ink-3 max-w-[520px]">One message is enough to start. Every decision stays in your hands.</p>
+        <p className="m-0 text-lg text-ink-3 max-w-[520px]">Track spending in a way that fits your day, with every change in your control.</p>
         <LandingActions placement="footer" />
       </section>
 

@@ -1,13 +1,5 @@
 import { expect, test } from "@playwright/test";
 
-test.beforeEach(async ({ page }) => {
-  await page.route("https://uselessfacts.jsph.pl/**", (route) => route.fulfill({
-    contentType: "application/json",
-    body: JSON.stringify({ id: "f1", text: "Starfish have no brains.", source: "djtech.net",
-      source_url: "https://www.djtech.net/humor/shorty_useless_facts.htm", language: "en" }),
-  }));
-});
-
 test("owner can sign in, load the dashboard, and sign out", async ({ page }) => {
   let authenticated = false;
 
@@ -141,14 +133,8 @@ test("a transient network failure on launch retries instead of signing the owner
   expect(sessionChecks).toBe(2);
 });
 
-test("dashboard shows a useless fact instead of the AI shortcuts and can fetch another", async ({ page }) => {
-  const facts = ["Starfish have no brains.", "Honey never spoils."];
-  let requests = 0;
+test("dashboard does not show the removed useless fact widget", async ({ page }) => {
   await page.unrouteAll();
-  await page.route("https://uselessfacts.jsph.pl/**", (route) => {
-    const text = facts[Math.min(requests++, facts.length - 1)];
-    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ id: String(requests), text, source: "example.org", source_url: "https://example.org" }) });
-  });
   await page.route("**/api/auth/me", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ username: "owner" }) }));
   await page.route("**/api/reports/dashboard?period=**", (route) => route.fulfill({
     contentType: "application/json",
@@ -158,12 +144,8 @@ test("dashboard shows a useless fact instead of the AI shortcuts and can fetch a
   await page.route("**/api/chat/pins", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [] }) }));
 
   await page.goto("/dashboard");
-  const card = page.getByRole("region", { name: "Useless fact" }).first();
-  await expect(card).toContainText("Starfish have no brains.");
-  await expect(page.getByText("Add with AI")).toHaveCount(0);
-  await expect(page.getByText(/Ask or log anything/)).toHaveCount(0);
-  await card.getByRole("button", { name: "Show another fact" }).click();
-  await expect(card).toContainText("Honey never spoils.");
+  await expect(page.getByRole("region", { name: "Useless fact" })).toHaveCount(0);
+  await expect(page.getByText("Starfish have no brains.")).toHaveCount(0);
 });
 
 test("the brand link opens the landing page, which plays the product demo video", async ({ page }) => {

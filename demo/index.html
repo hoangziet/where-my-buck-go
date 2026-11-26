@@ -6,7 +6,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1920, height=1080" />
-    <title>Where My Buck Go — 15s demo</title>
+    <title>Where My Buck Go — 28s product demo</title>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
     <style>
       :root {
@@ -38,7 +38,7 @@
       id="root"
       data-composition-id="main"
       data-start="0"
-      data-duration="15"
+      data-duration="28.2"
       data-width="1920"
       data-height="1080"
     >
@@ -54,10 +54,21 @@
         data-height="1080"
       ></div>
       <div
+        id="telegram"
+        data-composition-id="telegram"
+        data-composition-src="compositions/telegram.html"
+        data-start="7.8"
+        data-duration="13.2"
+        data-track-index="0"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+      <div
         id="month"
         data-composition-id="month"
         data-composition-src="compositions/month.html"
-        data-start="7.8"
+        data-start="21"
         data-duration="4.2"
         data-track-index="0"
         data-track-kind="graphics"
@@ -68,7 +79,7 @@
         id="endcard"
         data-composition-id="endcard"
         data-composition-src="compositions/endcard.html"
-        data-start="12"
+        data-start="25.2"
         data-duration="3"
         data-track-index="0"
         data-track-kind="graphics"
@@ -80,8 +91,9 @@
       <audio id="vo-hook" class="clip" src="assets/voice/vo-1-hook.wav" data-start="0.05" data-duration="1.31" data-track-index="1" data-volume="1.717908"></audio>
       <audio id="vo-draft" class="clip" src="assets/voice/vo-2-draft.wav" data-start="2.3" data-duration="1.7" data-track-index="1" data-volume="1.659587"></audio>
       <audio id="vo-confirm" class="clip" src="assets/voice/vo-3-confirm.wav" data-start="4.05" data-duration="2.04" data-track-index="1" data-volume="1.396368"></audio>
-      <audio id="vo-month" class="clip" src="assets/voice/vo-4-month.wav" data-start="8.08" data-duration="1.74" data-track-index="1" data-volume="1.135011"></audio>
-      <audio id="vo-end" class="clip" src="assets/voice/vo-5-end.wav" data-start="12.85" data-duration="1.82" data-track-index="1" data-volume="1.798871"></audio>
+      <audio id="vo-telegram" class="clip" src="assets/voice/vo-telegram.wav" data-start="7.95" data-duration="11.58" data-track-index="1" data-volume="1.35"></audio>
+      <audio id="vo-month" class="clip" src="assets/voice/vo-4-month.wav" data-start="21.28" data-duration="1.74" data-track-index="1" data-volume="1.135011"></audio>
+      <audio id="vo-end" class="clip" src="assets/voice/vo-5-end.wav" data-start="25.45" data-duration="1.82" data-track-index="1" data-volume="1.798871"></audio>
     </div>
     <script>
       window.__timelines = window.__timelines || {};

@@ -85,6 +85,10 @@ body {
   margin: auto;
 }
 
+html:has(.report-query-dialog[open]) {
+  overflow: hidden;
+}
+
 .report-query-dialog::backdrop {
   background: rgb(22 32 26 / 62%);
   backdrop-filter: blur(4px);
