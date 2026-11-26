@@ -45,9 +45,12 @@ export function ReportPreview() {
               <p className="m-0 text-xs text-muted">16–18 November 2026 · VND</p>
             </div>
           </div>
-          <span className="hidden items-center gap-1 rounded-full bg-accent-soft-bg px-2.5 py-1 text-xs font-medium text-accent-strong sm:inline-flex">
-            <LockKeyhole size={12} /> Account scoped
-          </span>
+          <div className="flex flex-col items-end gap-2">
+            <span className="inline-flex items-center rounded-full border border-border-row px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">Product preview</span>
+            <span className="hidden items-center gap-1 rounded-full bg-accent-soft-bg px-2.5 py-1 text-xs font-medium text-accent-strong sm:inline-flex">
+              <LockKeyhole size={12} /> Account scoped
+            </span>
+          </div>
         </div>
         <p className="mb-0 mt-4 rounded-xl bg-[#F4F2EC] px-4 py-3 text-sm font-medium text-ink-2">
           “How much have I spent on food and drink this week?”
@@ -125,7 +128,7 @@ export function ReportPreview() {
           <p className="mb-0 mt-5 text-xs leading-relaxed text-muted">
             The backend binds <code>:owner_id</code> to the signed-in account, <code>:direction</code> to expense,
             <code> :start_date</code> and <code>:end_date</code> to the reporting period, and <code>:limit</code> to 200.
-            The week and category in this example are selected from the returned records. Identifiers and transaction values are illustrative.
+            The week and category shown here come from the returned records.
           </p>
         </div>
       </dialog>

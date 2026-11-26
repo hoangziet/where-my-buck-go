@@ -8,7 +8,6 @@ import * as api from "@/lib/api";
 import type { Category, DashboardSummary, PinDto, TransactionDto } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { UselessFactCard } from "@/components/dashboard/UselessFactCard";
 import { chartBuckets, type DashboardPeriod } from "@/components/dashboard/period";
 
 const CATEGORY_COLORS: Record<Category, string> = {
@@ -101,8 +100,6 @@ export default function DashboardPage() {
           </div>
           <PeriodFilter period={period} onChange={changePeriod} />
         </div>
-
-        <UselessFactCard />
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
           <KpiCard label="Balance" value={loading ? "…" : formatVND(balance)} sub="Current balance" />
@@ -262,8 +259,6 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-
-        <UselessFactCard />
 
         <section className="bg-surface border border-border rounded-2xl p-4 flex flex-col gap-3">
           <h2 className="m-0 text-[15px] font-semibold">Spending by category</h2>

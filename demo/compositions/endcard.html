@@ -36,7 +36,7 @@
     // Tagline, word by word light grey to ink; holds to the end
     // Words darken as the voiceover says them (Whisper word timings, assets/voice/words/vo-5-end.json).
     [0.9, 1.03, 1.45, 1.79, 2.18, 2.57].forEach((at, i) => {
-      tl.fromTo(`#e-tag span:nth-child(${i + 1})`, { color: "#d4d8d3" }, { color: i >= 4 ? "#1f6b44" : "#16201a", duration: 0.12, ease: "none" }, at);
+      tl.fromTo(`#e-tag span:nth-child(${i + 1})`, { color: "#58645c" }, { color: i >= 4 ? "#1f6b44" : "#16201a", duration: 0.12, ease: "none" }, at);
     });
     window.__timelines["endcard"] = tl;
   </script>

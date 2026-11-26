@@ -401,7 +401,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
     .slice(0, 20);
 
   return (
-    <div className="flex-1 flex overflow-hidden min-h-screen lg:min-h-0">
+    <div className="flex h-[calc(100dvh-112px-env(safe-area-inset-top))] lg:h-[calc(100dvh-73px-env(safe-area-inset-top))] min-h-0 flex-1 overflow-hidden">
       <ChatSidebar
         activeChatId={chatId}
         isOpen={sidebarOpen}
@@ -411,8 +411,8 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
         refreshTrigger={refreshSidebarTrigger}
       />
 
-      <main className="flex-1 flex flex-col min-w-0 min-h-screen lg:min-h-0 overflow-y-auto">
-        <header className="flex items-center gap-2 px-3.5 py-3 border-b border-border-nav bg-surface sticky top-0 z-20">
+      <main className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
+        <header className="flex shrink-0 items-center gap-2 px-3.5 py-3 border-b border-border-nav bg-surface">
           <button
             type="button"
             aria-label={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
@@ -432,8 +432,8 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
           </button>
         </header>
 
-        <div className="flex-1 px-4 lg:px-8 pb-40 lg:pb-8 flex flex-col">
-          <div role="log" aria-live="polite" className="w-full max-w-[860px] mx-auto flex flex-col gap-7 pt-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-40 pt-4 lg:px-8 lg:pb-6">
+          <div role="log" aria-live="polite" className="w-full max-w-[860px] mx-auto flex flex-col gap-7">
 
           {(pendingDrafts.length > 0 || draftLoadError) && (
             <section aria-label="Pending drafts" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
@@ -568,7 +568,7 @@ function ChatPageInner({ urlChatId }: { urlChatId?: string }) {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 lg:static lg:mt-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 lg:px-8 bg-bg lg:bg-transparent">
+      <div className="shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 lg:px-8 bg-bg lg:bg-transparent">
         <div className="w-full max-w-[860px] mx-auto flex flex-col gap-2">
           <form
             onSubmit={(e) => {

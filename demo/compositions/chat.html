@@ -34,10 +34,10 @@
     .c-bubble { position: absolute; right: 126px; top: 104px; background: #16201a; color: #fff; padding: 12px 16px; border-radius: 16px 16px 4px 16px; font-size: 15px; transform-origin: 100% 50%; opacity: 0; }
     .c-ai { position: absolute; left: 386px; top: 166px; width: 640px; display: flex; gap: 14px; align-items: flex-start; }
     .c-ai p { font-size: 15px; line-height: 1.5; padding-top: 4px; color: #16201a; }
-    .c-ai p span { color: #c9cec9; }
+    .c-ai p span { color: #58645c; }
     #c-logo { opacity: 0; }
     .c-composer { position: absolute; left: 386px; top: 568px; width: 640px; height: 56px; background: #fff; border: 1px solid #e3e1d8; border-radius: 18px;
-      display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 18px; font-size: 14px; color: #8a938c; }
+      display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 18px; font-size: 14px; color: #58645c; }
     .c-send { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; opacity: .5; }
     #c-veil { position: absolute; inset: 0; background: #fbfaf6; opacity: 0; z-index: 4; }
     /* ProposalCard (mirrors frontend chat/page.tsx) */
@@ -136,7 +136,7 @@
     tl.fromTo("#c-bubble", { opacity: 0, scaleX: 0.4, filter: "blur(6px)" }, { opacity: 1, scaleX: 1, filter: "blur(0px)", duration: 0.32, ease: "power3.out" }, 1.85);
     // Assistant reply: logo, then words grey to ink
     tl.fromTo("#c-logo", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 2.45);
-    tl.fromTo("#c-reply span", { color: "#c9cec9" }, { color: "#16201a", duration: 0.12, stagger: 0.07, ease: "none" }, 2.55);
+    tl.fromTo("#c-reply span", { color: "#58645c" }, { color: "#16201a", duration: 0.12, stagger: 0.07, ease: "none" }, 2.55);
     // Draft card populates
     tl.fromTo("#c-card", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" }, 3.05);
     tl.fromTo("#c-card .c-row", { opacity: 0 }, { opacity: 1, duration: 0.2, stagger: 0.06 }, 3.15);
